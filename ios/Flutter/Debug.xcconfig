@@ -1,1 +1,4 @@
 #include "Generated.xcconfig"
+
+GOOGLE_REVERSED_CLIENT_ID = com.viitor.bots.google-unconfigured
+#include? "GoogleSignIn.local.xcconfig"

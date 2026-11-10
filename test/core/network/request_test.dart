@@ -1,9 +1,8 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sweet/core/network/api_client.dart';
-import 'package:sweet/core/network/request_controller.dart';
+import 'package:bots/core/network/api_client.dart';
+import 'package:bots/core/network/request_controller.dart';
 
 void main() {
   test('请求携带参数和 token，并支持模型转换和清除 token', () async {

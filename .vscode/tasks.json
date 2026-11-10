@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Prepare Google OAuth development",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/configure_google_sign_in.py",
+        "--config",
+        "${workspaceFolder}/env/development.local.json"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Prepare Google OAuth production",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/configure_google_sign_in.py",
+        "--config",
+        "${workspaceFolder}/env/production.json"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-package com.example.sweet
+package com.viitor.bots
 
 import io.flutter.embedding.android.FlutterActivity
 

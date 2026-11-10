@@ -15,6 +15,7 @@ class RequestController<T> extends ChangeNotifier {
   bool get loading => _loading;
 
   Future<void> run(Future<T> Function(CancelToken token) task) async {
+    assert(!_disposed, 'RequestController 已 dispose，不能再调用 run');
     if (_disposed) return;
     _token?.cancel('请求已被替换');
     final token = CancelToken();
@@ -39,7 +40,7 @@ class RequestController<T> extends ChangeNotifier {
     }
   }
 
-  /// 取消时保留已有数据，不作为请求失败处理。
+  /// 取消时保留已有数据，不作为请求失败处理；上一次的 error 也不清空。
   void cancel() {
     if (_disposed) return;
     _token?.cancel('请求已取消');

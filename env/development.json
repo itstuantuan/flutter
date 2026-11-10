@@ -1,4 +1,10 @@
 {
   "APP_ENV": "development",
-  "API_BASE_URL": ""
+  "API_BASE_URL": "",
+  "API_PRODUCT": "bots",
+  "API_PLATFORM": "ios",
+  "API_SECRET_KEY": "",
+  "ACCOUNT_BASE_URL": "https://account-api.ilivedata.com",
+  "GOOGLE_IOS_CLIENT_ID": "",
+  "GOOGLE_SERVER_CLIENT_ID": ""
 }
