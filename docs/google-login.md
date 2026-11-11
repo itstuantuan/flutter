@@ -61,11 +61,11 @@ Google 响应不要求 phone/avatar，缺省按空字符串处理；邮箱必须
 
 | 负责人 | 配置或确认项 | 说明 |
 | --- | --- | --- |
-| Google Cloud / Firebase 项目管理员 | GOOGLE_IOS_CLIENT_ID | OAuth 类型为 iOS，Bundle ID 必须与实际 iOS App 一致。当前为 com.viitor.bots |
+| Google Cloud / Firebase 项目管理员 | GOOGLE_IOS_CLIENT_ID | OAuth 类型为 iOS，Bundle ID 必须与实际 iOS App 一致。当前为 com.viitor.bot |
 | Google Cloud / Firebase 项目管理员 + 用户系统后端 | GOOGLE_SERVER_CLIENT_ID | OAuth 类型为 Web application，用作服务器验证 ID Token 的 audience；不是 iOS Client ID |
 | 用户系统后端 | bots / ios 的 Google 登录和 audience 校验 | 确认 /account/google_login 可用，接受上述 Web Client ID，按需要配置原生客户端的 authorized party / azp |
 | Google Cloud 项目管理员 | OAuth 同意屏幕 | 应用名称、支持邮箱、使用范围、测试用户；Testing 阶段给测试账号放行，正式上线时完成适用的发布/验证要求 |
-| Android 发布负责人（测试 Android 时） | Android OAuth 客户端 | 注册实际 applicationId（当前 com.viitor.bots）以及 debug/release/Google Play App Signing 对应 SHA-1；Firebase 项目按要求也登记 SHA-256 |
+| Android 发布负责人（测试 Android 时） | Android OAuth 客户端 | 注册实际 applicationId（当前 com.viitor.bot）以及 debug/release/Google Play App Signing 对应 SHA-1；Firebase 项目按要求也登记 SHA-256 |
 | 用户系统负责人（测试 Android 时） | bots / android 签名密钥 | 当前配置只有 bots / ios，不可把 iOS 密钥用于 Android |
 
 优先在现有 Google 项目中创建原生客户端，并让 Web 类型的服务器客户端与之属于同一项目。

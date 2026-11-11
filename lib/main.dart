@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'features/auth/account_service.dart';
 import 'features/auth/auth_debug_log.dart';
-import 'features/auth/login_demo_page.dart';
+import 'features/experience/experience_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +24,7 @@ class MainApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: LoginDemoPage(service: account),
+      home: const ExperiencePage(),
     );
   }
 }

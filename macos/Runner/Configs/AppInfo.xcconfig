@@ -8,7 +8,7 @@
 PRODUCT_NAME = Bots
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.viitor.bots
+PRODUCT_BUNDLE_IDENTIFIER = com.viitor.bot
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.viitor. All rights reserved.

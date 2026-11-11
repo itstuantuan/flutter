@@ -1,4 +1,4 @@
-package com.viitor.bots
+package com.viitor.bot
 
 import io.flutter.embedding.android.FlutterActivity
 
