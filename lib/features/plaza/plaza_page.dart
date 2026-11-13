@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import '../chat/chat_page.dart';
 import 'plaza_dialogue.dart';
+import 'plaza_discovery.dart';
 import 'plaza_scenarios.dart';
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 /// Plaza artwork with locally scripted conversations from Figma 340:6678.
 class PlazaPage extends StatefulWidget {
-  const PlazaPage({super.key, this.onChat, this.onVoice});
+  const PlazaPage({
+    super.key,
+    this.onChat,
+    this.onVoice,
+    this.initialDiscovery,
+  });
+  final int? initialDiscovery;
   final VoidCallback? onChat, onVoice;
   @override
   State<PlazaPage> createState() => _PlazaPageState();
@@ -20,6 +27,54 @@ class PlazaPage extends StatefulWidget {
 class _PlazaPageState extends State<PlazaPage> {
   static final _picker = PlazaScenarioPicker();
   late final _scenario = _picker.next();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialDiscovery != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showDiscovery();
+      });
+    }
+  }
+
+  Future<void> _showDiscovery() async {
+    final selected = await showPlazaDiscoveries(
+      context,
+      initialPage: widget.initialDiscovery ?? 0,
+    );
+    if (!mounted || selected == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                selected.title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                selected.body,
+                style: const TextStyle(fontSize: 16, height: 1.6),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('返回广场'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   void _chat(BuildContext context, bool voice) {
     final callback = voice ? widget.onVoice : widget.onChat;

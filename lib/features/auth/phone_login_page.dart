@@ -459,7 +459,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                           Text(
                             _codeStep
                                 ? '验证码发送至+86 ${_phone.text}'
-                                : '登录开始你的路程,Bot在等你',
+                                : '登录开始你的路程,Pals在等你',
                             textAlign: TextAlign.center,
                             style: _text.copyWith(
                               color: const Color(0xB3FFFFFF),

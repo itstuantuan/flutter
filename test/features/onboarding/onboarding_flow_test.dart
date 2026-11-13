@@ -4,6 +4,7 @@ import 'package:bots/features/experience/experience_store.dart';
 import 'package:bots/features/onboarding/welcome_page.dart';
 import 'package:bots/features/home/home_page.dart';
 import 'package:bots/features/plaza/plaza_page.dart';
+import 'package:bots/features/plaza/plaza_discovery.dart';
 import 'package:bots/features/onboarding/world_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -133,6 +134,9 @@ void main() {
       await tester.tap(find.text('去看看').hitTestable());
       await tester.pumpAndSettle();
       expect(find.byType(PlazaPage), findsOneWidget);
+      expect(find.byType(PlazaDiscoveryDialog), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('返回首页'));
       await tester.pumpAndSettle();
       expect(find.byType(HomePage), findsOneWidget);

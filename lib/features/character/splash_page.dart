@@ -107,7 +107,7 @@ class SplashArtwork extends StatefulWidget {
     (name: 'splash_character', rect: Rect.fromLTWH(54, 253, 262, 447)),
     (name: 'splash_ribbon', rect: Rect.fromLTWH(0, 544, 375, 268)),
     (name: 'splash_shadow', rect: Rect.fromLTWH(81.1, 634.1, 235.8, 104.8)),
-    (name: 'splash_brand', rect: Rect.fromLTWH(32, 141, 310, 85.727)),
+    (name: 'splash_brand', rect: Rect.fromLTWH(58.06, 134, 254.505, 80.089)),
   ];
 
   @override
@@ -255,7 +255,7 @@ class _SplashArtworkState extends State<SplashArtwork>
     child: Scaffold(
       backgroundColor: const Color(0xFF431A90),
       body: Semantics(
-        label: 'ViiTor Bot. Your AI friend and digital twin. Welcome to ViiTor Bot!',
+        label: 'Pals。你的专属 AI 伙伴，也是另一个自己。Welcome to Pals!',
         image: true,
         child: ExcludeSemantics(
           child: SizedBox.expand(
@@ -320,7 +320,7 @@ class _BackRibbonPainter extends CustomPainter {
   final Animation<double> progress;
   final TextPainter _label = TextPainter(
     text: const TextSpan(
-      text: 'ViiTor Bot-Your AI friend and digital twin.',
+      text: 'Pals-Your AI friend and digital twin.',
       style: TextStyle(
         color: Colors.white,
         fontSize: 20,

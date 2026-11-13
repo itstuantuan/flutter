@@ -212,7 +212,7 @@ class _WelcomePageState extends State<WelcomePage>
     header: const OnboardingHeader(
       title: '遇见懂你的TA,',
       subtitle: '开启专属陪伴',
-      description: 'ViiTor是一个懂你、关心你的AI伙伴,随时和你\n聊天,记住你的喜好与想法,陪伴你一起成长.',
+      description: 'Pals是一个懂你、关心你的AI伙伴,随时和你\n聊天,记住你的喜好与想法,陪伴你一起成长.',
       left: 18,
       right: 38,
       titleGap: 11,

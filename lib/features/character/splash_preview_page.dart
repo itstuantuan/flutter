@@ -135,7 +135,7 @@ class _SplashPreviewPageState extends State<SplashPreviewPage>
                                                 ],
                                               ).createShader(bounds),
                                           child: const Text(
-                                            'ViiTor Bot',
+                                            'Pals',
                                             style: TextStyle(
                                               fontSize: 39,
                                               fontWeight: FontWeight.w900,
@@ -173,7 +173,7 @@ class _SplashPreviewPageState extends State<SplashPreviewPage>
                               child: Transform.rotate(
                                 angle: 0.16,
                                 child: _Ribbon(
-                                  text: 'ViiTor Bot     Your AI friend and digital twin.',
+                                  text: 'Pals     Your AI friend and digital twin.',
                                   progress: ribbons.value,
                                   fontSize: 23,
                                 ),
@@ -202,7 +202,7 @@ class _SplashPreviewPageState extends State<SplashPreviewPage>
                                         child: Image.asset(
                                           'assets/characters/viitor_splash.png',
                                           fit: BoxFit.contain,
-                                          semanticLabel: '紫发 ViiTor 侧身微笑，手持小人偶',
+                                          semanticLabel: '紫发 Pals 侧身微笑，手持小人偶',
                                         ),
                                       ),
                                     ),
@@ -218,7 +218,7 @@ class _SplashPreviewPageState extends State<SplashPreviewPage>
                               child: Transform.rotate(
                                 angle: -0.52,
                                 child: _Ribbon(
-                                  text: 'Welcome to ViiTor Bot!',
+                                  text: 'Welcome to Pals!',
                                   progress: -ribbons.value,
                                   fontSize: 28,
                                 ),

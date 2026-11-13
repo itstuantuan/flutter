@@ -541,6 +541,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PlazaPage(
+          initialDiscovery: index,
           onChat: _homeChat,
           onVoice: () => _homeChat(record: true),
         ),
