@@ -40,9 +40,10 @@ void main() {
               ),
             ),
           );
-          await tester.pumpAndSettle();
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 1));
           expect(tester.takeException(), isNull, reason: '$size scale $scale');
-          final image = tester.getSize(find.byType(Image));
+          final image = tester.getSize(find.byType(Image).first);
           expect(
             image.width,
             closeTo(
@@ -90,7 +91,8 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
       final scroll = tester.state<ScrollableState>(
         find
             .descendant(
@@ -125,7 +127,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     for (var page = 0; page < 3; page++) {
       await tester.tap(find.text('去看看').hitTestable());
       expect(opened.last, page);
@@ -134,7 +137,8 @@ void main() {
           find.byKey(const ValueKey('home-discoveries')),
           const Offset(-300, 0),
         );
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
       }
     }
     expect(tester.takeException(), isNull);

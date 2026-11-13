@@ -114,6 +114,10 @@ void main() {
       final flow = ExperienceController(store);
       await tester.pumpWidget(
         MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
           home: ExperiencePage(controller: flow, previewWelcomeOnStart: true),
         ),
       );

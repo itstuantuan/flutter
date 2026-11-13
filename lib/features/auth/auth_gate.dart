@@ -130,8 +130,8 @@ class _AuthGateState extends State<AuthGate> {
         onComplete: () {},
       );
     }
-    if (!_authenticated &&
-        !_returning &&
+    if (_authenticated &&
+        _newUser &&
         (_profile['name'] as String? ?? '').isEmpty) {
       return NamePage(
         onContinue: (name) async {
@@ -149,6 +149,8 @@ class _AuthGateState extends State<AuthGate> {
     }
     return widget.experienceBuilder?.call(_newUser) ??
         ExperiencePage(
+          userId: _uid!,
+          profileStore: widget.profileStore,
           registrationCompleted: true,
           returningUser: !_newUser,
           onRegistrationChatComplete: _completeRegistrationChat,

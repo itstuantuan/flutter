@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../shared/design_scene.dart';
+import 'home_chat_hint.dart';
 
 enum DiscoveryStyle { blue, purple, glass }
 
@@ -377,6 +378,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
+              ),
+              Positioned(
+                right: safe.right + 16,
+                bottom: footerBottom - 39,
+                width: 183,
+                height: 180,
+                child: const HomeChatHint(),
               ),
             ],
           );

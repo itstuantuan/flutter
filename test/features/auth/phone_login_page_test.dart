@@ -225,6 +225,11 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('login-next')));
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('login-name')), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('login-name')), 'Test');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('name-next')));
+      await tester.pumpAndSettle();
       expect(find.text('new-user-intro'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },

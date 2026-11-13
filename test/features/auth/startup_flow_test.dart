@@ -9,9 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:bots/features/chat/chat_page.dart';
 import 'package:bots/features/home/home_page.dart';
+import 'package:bots/features/onboarding/interests_page.dart';
+import 'package:bots/features/plaza/plaza_page.dart';
 import 'package:bots/features/auth/account_service.dart';
 
-import 'phone_login_page_test.dart' show FakePhoneAccount;
+import 'phone_login_page_test.dart' show FakePhoneAccount, fillPhone;
 
 class NewAccount extends FakePhoneAccount {
   @override
@@ -49,6 +51,10 @@ void main() {
     );
     Widget app(int key) => MaterialApp(
       key: ValueKey(key),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: true),
+        child: child!,
+      ),
       home: AuthGate(
         key: ValueKey(key),
         service: account,
@@ -83,6 +89,23 @@ void main() {
     expect(find.byType(HomePage), findsOneWidget);
     expect(profile.value['registrationChats'], {'new-user': 'done'});
 
+    tester.widget<HomePage>(find.byType(HomePage)).onExplore();
+    await tester.pumpAndSettle();
+    expect(find.byType(InterestsPage), findsOneWidget);
+    await tester.widget<InterestsPage>(find.byType(InterestsPage)).onStart([
+      '音乐',
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.byType(PlazaPage), findsOneWidget);
+    await tester.tap(find.byTooltip('返回首页'));
+    await tester.pumpAndSettle();
+    tester.widget<HomePage>(find.byType(HomePage)).onExplore();
+    await tester.pumpAndSettle();
+    expect(find.byType(InterestsPage), findsNothing);
+    expect(find.byType(PlazaPage), findsOneWidget);
+    await tester.tap(find.byTooltip('返回首页'));
+    await tester.pumpAndSettle();
+
     tester.widget<HomePage>(find.byType(HomePage)).onChat();
     await tester.pumpAndSettle();
     expect(
@@ -108,7 +131,7 @@ void main() {
   });
 
   testWidgets(
-    'new launch resumes intro then name before phone; save failures do not advance',
+    'new launch verifies phone before name and resumes unfinished name entry',
     (tester) async {
       final profile = TestProfile();
       final account = NewAccount();
@@ -140,8 +163,36 @@ void main() {
       expect(find.byType(WorldPage), findsOneWidget);
       await tester.tap(find.text('进入这个世界'));
       await tester.pumpAndSettle();
-      expect(find.byType(NamePage), findsOneWidget);
+      expect(find.byType(PhoneLoginPage), findsOneWidget);
+      expect(find.byType(NamePage), findsNothing);
       expect(profile.value['introDone'], true);
+      account.result = const AccountSession(
+        registered: 1,
+        uid: 'new',
+        nick: '',
+        avatar: '',
+        phone: '86-13800138000',
+        product: 'bots',
+        platform: 'ios',
+        token: 'test',
+      );
+      await fillPhone(tester);
+      await tester.tap(find.byKey(const ValueKey('login-next')));
+      await tester.pumpAndSettle();
+      expect(find.byType(NamePage), findsNothing);
+      await tester.enterText(
+        find.byKey(const ValueKey('login-code')),
+        '123456',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('login-next')));
+      await tester.pumpAndSettle();
+      expect(account.verifies, 1);
+      expect(find.byType(NamePage), findsOneWidget);
+      account.restored = account.result;
+      await tester.pumpWidget(app(3));
+      await tester.pumpAndSettle();
+      expect(find.byType(NamePage), findsOneWidget);
       expect(
         tester
             .widget<TextButton>(find.byKey(const ValueKey('name-next')))
@@ -160,11 +211,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('name-next')));
       await tester.pumpAndSettle();
       expect(profile.value['name'], '小宝');
-      expect(find.byType(PhoneLoginPage), findsOneWidget);
-      expect(account.verifies, 0);
-      await tester.pumpWidget(app(3));
+      expect(find.text('home'), findsOneWidget);
+      await tester.pumpWidget(app(4));
       await tester.pumpAndSettle();
-      expect(find.byType(PhoneLoginPage), findsOneWidget);
+      expect(find.byType(NamePage), findsNothing);
+      expect(find.text('home'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );

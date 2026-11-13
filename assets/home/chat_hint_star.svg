@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame 2085664817" clip-path="url(#clip0_0_37)">
+<path id="Star 13" d="M5 0L5.71216 1.92458C6.1173 3.01946 6.98054 3.8827 8.07542 4.28784L10 5L8.07542 5.71216C6.98054 6.1173 6.1173 6.98054 5.71216 8.07542L5 10L4.28784 8.07542C3.8827 6.98054 3.01946 6.1173 1.92458 5.71216L0 5L1.92458 4.28784C3.01946 3.8827 3.8827 3.01946 4.28784 1.92458L5 0Z" fill="#D1AAFE"/>
+<path id="Star 14" d="M10 8C10.3429 8.92658 11.0734 9.65713 12 10C11.0734 10.3429 10.3429 11.0734 10 12C9.65713 11.0734 8.92658 10.3429 8 10C8.92658 9.65713 9.65713 8.92658 10 8Z" fill="#D1AAFE"/>
+</g>
+<defs>
+<clipPath id="clip0_0_37">
+<rect width="12" height="12" fill="white"/>
+</clipPath>
+</defs>
+</svg>

@@ -32,6 +32,11 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: buildAppTheme(),
+            // Freeze decorative motion when comparing pressed-state pixels.
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
             home: RepaintBoundary(
               key: canvasKey,
               child: onboarding

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../notifications/push_service.dart';
+import '../notifications/notification_prompt.dart';
 import '../home/home_page.dart';
 import '../plaza/plaza_page.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -28,10 +29,14 @@ class ExperiencePage extends StatefulWidget {
     this.registrationCompleted = false,
     this.returningUser = true,
     this.onRegistrationChatComplete,
+    this.userId = 'local-preview',
+    this.profileStore = const StartupProfileStore(),
   });
   final bool previewWelcomeOnStart;
   final bool registrationCompleted;
   final bool returningUser;
+  final String userId;
+  final StartupProfileStore profileStore;
   final Future<void> Function()? onRegistrationChatComplete;
   final ExperienceController? controller;
   @override
@@ -384,6 +389,7 @@ class _ExperiencePageState extends State<ExperiencePage>
       if (flow.error != null) throw StateError(flow.error!);
       await account.resetForNewUserTest();
       await const StartupProfileStore().clear();
+      await const NotificationPromptStore().clear();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(builder: (_) => AuthGate(service: account)),
@@ -480,28 +486,49 @@ class _ExperiencePageState extends State<ExperiencePage>
     if (explore == true && mounted) await _explore();
   }
 
+  bool _exploreOpening = false;
   Future<void> _explore() async {
-    final selected = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (routeContext) => InterestsPage(
-          onStart: (values) async {
-            await flow.saveInterests(values);
-            if (flow.error != null) return false;
-            if (routeContext.mounted) Navigator.pop(routeContext, true);
-            return true;
-          },
-        ),
-      ),
-    );
-    if (selected == true && mounted) {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => PlazaPage(
-            onChat: _homeChat,
-            onVoice: () => _homeChat(record: true),
-          ),
-        ),
+    if (_exploreOpening) return;
+    _exploreOpening = true;
+    try {
+      var selected = await widget.profileStore.hasSelectedInterests(
+        widget.userId,
       );
+      if (!mounted) return;
+      if (!selected) {
+        selected =
+            await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (routeContext) => InterestsPage(
+                  onStart: (values) async {
+                    await flow.saveInterests(values);
+                    if (flow.error != null) return false;
+                    await widget.profileStore.saveSelectedInterests(
+                      widget.userId,
+                      values,
+                    );
+                    if (routeContext.mounted) Navigator.pop(routeContext, true);
+                    return true;
+                  },
+                ),
+              ),
+            ) ==
+            true;
+      }
+      if (selected && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PlazaPage(
+              onChat: _homeChat,
+              onVoice: () => _homeChat(record: true),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) _notice('无法读取兴趣选择，请重试');
+    } finally {
+      _exploreOpening = false;
     }
   }
 
@@ -549,25 +576,28 @@ class _ExperiencePageState extends State<ExperiencePage>
           onComplete: () => setState(() => _welcomePreviewDismissed = true),
         )
       : _showHome
-      ? HomePage(
-          onMenu: _homeMenu,
-          onFriends: () => _notice('好友功能尚未开放'),
-          onExplore: _explore,
-          onChat: _homeChat,
-          onVoice: () => _homeChat(record: true),
-          onDiscovery: _homeDiscovery,
-          discoveries: flow.discoveryCount == 0
-              ? HomePage.designDiscoveries
-              : [
-                  for (var i = 0; i < flow.discoveryCount; i++)
-                    HomeDiscovery(
-                      description: flow.isRead(i) ? '已读发现' : '探索带回了新发现：',
-                      title: flow.discoveryTitle(i),
-                      style: i == 0
-                          ? DiscoveryStyle.blue
-                          : DiscoveryStyle.purple,
-                    ),
-                ],
+      ? HomeNotificationPrompt(
+          push: push,
+          child: HomePage(
+            onMenu: _homeMenu,
+            onFriends: () => _notice('好友功能尚未开放'),
+            onExplore: _explore,
+            onChat: _homeChat,
+            onVoice: () => _homeChat(record: true),
+            onDiscovery: _homeDiscovery,
+            discoveries: flow.discoveryCount == 0
+                ? HomePage.designDiscoveries
+                : [
+                    for (var i = 0; i < flow.discoveryCount; i++)
+                      HomeDiscovery(
+                        description: flow.isRead(i) ? '已读发现' : '探索带回了新发现：',
+                        title: flow.discoveryTitle(i),
+                        style: i == 0
+                            ? DiscoveryStyle.blue
+                            : DiscoveryStyle.purple,
+                      ),
+                  ],
+          ),
         )
       : Scaffold(
           appBar: AppBar(
