@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="327.966" height="59.9655" viewBox="0 0 327.966 59.9655" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 427318807">
+<mask id="stroke0_0_39" maskUnits="userSpaceOnUse" x="-0.517251" y="-0.517251" width="329" height="61" fill="black">
+<rect fill="white" x="-0.517251" y="-0.517251" width="329" height="61"/>
+<path d="M327.483 3.57943V56.6576L321.205 59.4827H6.42415L0.482749 55.6302V3.11361L6.53548 0.482749H321.79L327.483 3.57943Z"/>
+</mask>
+<path id="Subtract" opacity="0.3" d="M327.483 3.57943V56.6576L321.205 59.4827H6.42415L0.482749 55.6302V3.11361L6.53548 0.482749H321.79L327.483 3.57943Z" stroke-width="0.965497" stroke="white" mask="url(#stroke0_0_39)"/>
+</g>
+</svg>

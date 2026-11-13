@@ -4,16 +4,35 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../notifications/push_service.dart';
+import '../home/home_page.dart';
+import '../plaza/plaza_page.dart';
+import '../onboarding/onboarding_flow.dart';
+import '../onboarding/interests_page.dart';
+import '../auth/startup_profile_store.dart';
+import '../chat/chat_page.dart';
 
 import 'package:flutter/material.dart';
 
 import '../auth/account_service.dart';
+import '../auth/auth_gate.dart';
+import '../../core/config/app_env.dart';
 import '../auth/login_demo_page.dart';
 import 'experience_controller.dart';
 import 'experience_store.dart';
 
 class ExperiencePage extends StatefulWidget {
-  const ExperiencePage({super.key, this.controller});
+  const ExperiencePage({
+    super.key,
+    this.controller,
+    this.previewWelcomeOnStart = false,
+    this.registrationCompleted = false,
+    this.returningUser = true,
+    this.onRegistrationChatComplete,
+  });
+  final bool previewWelcomeOnStart;
+  final bool registrationCompleted;
+  final bool returningUser;
+  final Future<void> Function()? onRegistrationChatComplete;
   final ExperienceController? controller;
   @override
   State<ExperiencePage> createState() => _ExperiencePageState();
@@ -38,6 +57,27 @@ class _ExperiencePageState extends State<ExperiencePage>
   }
 
   bool demoOpening = false;
+  bool _welcomePreviewDismissed = false;
+  bool _showFlowTools = false;
+  bool _finishingRegistration = false;
+  String? _registrationError;
+
+  Future<void> _finishRegistrationChat({bool explore = false}) async {
+    if (_finishingRegistration || flow.busy) return;
+    setState(() {
+      _finishingRegistration = true;
+      _registrationError = null;
+    });
+    try {
+      await widget.onRegistrationChatComplete?.call();
+      if (mounted && explore) await _explore();
+    } catch (_) {
+      if (mounted) setState(() => _registrationError = '保存失败，请重试');
+    } finally {
+      if (mounted) setState(() => _finishingRegistration = false);
+    }
+  }
+
   void refresh() {
     if (!mounted) return;
     setState(() {});
@@ -290,112 +330,378 @@ class _ExperiencePageState extends State<ExperiencePage>
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('ViiTor · 流程验证'),
-      actions: [
-        PopupMenuButton<String>(
-          onSelected: (value) async {
-            if (value == 'demoPush') {
-              final scheduled = await push.scheduleDemo();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    scheduled
-                        ? '已安排本地通知。现在回到桌面，约 5 秒后点击通知。'
-                        : push.error ?? '仅支持 iOS 调试版。',
-                  ),
-                ),
-              );
-            } else if (value == 'copyPushToken') {
-              if (!kDebugMode) return;
-              await push.refresh();
-              String message;
-              final token = push.token;
-              if (!push.supported) {
-                message = 'APNs 测试仅支持 iOS。';
-              } else if (token != null && token.isNotEmpty) {
-                try {
-                  await Clipboard.setData(ClipboardData(text: token));
-                  message = '已复制 APNs token，可粘贴到苹果推送控制台。';
-                } catch (_) {
-                  message = '复制失败，请重试。';
-                }
-              } else {
-                if (push.allowed) {
-                  await push.register();
-                } else {
-                  await push.request();
-                }
-                message =
-                    push.error ??
-                    (push.allowed
-                        ? '已请求 APNs 注册，请稍等后再次点击复制。'
-                        : '请在系统设置中允许通知后重试。');
-              }
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(message)));
-            } else if (value == 'auth') {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => LoginDemoPage(service: account),
-                ),
-              );
-            } else {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('重置模拟体验？'),
-                  content: const Text('仅清除本地模拟进度和聊天，不影响真实登录凭证。'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('取消'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('重置'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                input.clear();
-                await flow.reset();
-              }
-            }
-          },
-          itemBuilder: (_) => const [
-            if (kDebugMode)
-              PopupMenuItem(value: 'demoPush', child: Text('5 秒后发送本地测试通知')),
-            if (kDebugMode)
-              PopupMenuItem(
-                value: 'copyPushToken',
-                child: Text('复制 APNs token'),
-              ),
-            PopupMenuItem(value: 'auth', child: Text('账号联调页')),
-            PopupMenuItem(value: 'reset', child: Text('重置模拟体验')),
-          ],
-        ),
-      ],
-    ),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Text(
-            '模拟环境 · 占位 UI · 与真实账号隔离',
-            style: TextStyle(color: Colors.deepOrange),
+  bool get _showOnboarding {
+    if (!flow.ready || widget.registrationCompleted) return false;
+    if (widget.previewWelcomeOnStart) return !_welcomePreviewDismissed;
+    return flow.step == ExperienceStep.welcome ||
+        flow.step == ExperienceStep.world;
+  }
+
+  Future<bool> _advanceOnboarding(String? nextPageId) async {
+    if (flow.busy) return false;
+    if (flow.step == ExperienceStep.welcome ||
+        flow.step == ExperienceStep.world) {
+      await flow.advanceOnboarding(nextPageId);
+      return flow.error == null;
+    }
+    // Design review must not overwrite an existing user's mock experience.
+    return true;
+  }
+
+  bool get _showHome =>
+      flow.ready &&
+      !_showFlowTools &&
+      (widget.registrationCompleted ||
+          flow.step == ExperienceStep.home ||
+          (widget.previewWelcomeOnStart && _welcomePreviewDismissed));
+
+  void _notice(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _resetAsNewUser() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重置为新用户（测试）？'),
+        content: const Text('清除本地登录、引导进度和模拟聊天。下次登录后重新走完整新用户流程；服务器账号及数据不会删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
           ),
-          const SizedBox(height: 20),
-          if (flow.error != null)
-            Text(flow.error!, style: const TextStyle(color: Colors.red)),
-          if (!flow.ready) action('加载 / 重试', flow.load) else ...content(),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('重置'),
+          ),
         ],
       ),
-    ),
-  );
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await flow.reset();
+      if (flow.error != null) throw StateError(flow.error!);
+      await account.resetForNewUserTest();
+      await const StartupProfileStore().clear();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => AuthGate(service: account)),
+        (_) => false,
+      );
+    } catch (_) {
+      if (mounted) _notice('重置失败，请重试');
+    }
+  }
+
+  Future<void> _homeMenu() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (AppEnv.enableTestTools)
+              ListTile(
+                leading: const Icon(Icons.restart_alt),
+                title: const Text('重置为新用户（测试）'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _resetAsNewUser();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.explore_outlined),
+              title: const Text('创作广场'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => PlazaPage(
+                      onChat: _homeChat,
+                      onVoice: () => _homeChat(record: true),
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('流程验证'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _showFlowTools = true);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('账号联调'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LoginDemoPage(service: account),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _homeChat({bool record = false}) async {
+    final explore = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (chatContext) => ListenableBuilder(
+          listenable: flow,
+          builder: (_, _) => ChatPage(
+            name: flow.character.name,
+            returningUser: true,
+            messages: flow.chatMessages,
+            busy: flow.busy,
+            error: flow.error,
+            initialDraft: input.text,
+            startRecordingOnOpen: record,
+            onSend: (text) async {
+              await flow.send(text);
+              if (flow.error == null) input.clear();
+              return flow.error == null;
+            },
+            onVoiceRecorded: flow.saveVoice,
+            onExit: () => Navigator.pop(chatContext, false),
+            onExplore: () => Navigator.pop(chatContext, true),
+          ),
+        ),
+      ),
+    );
+    if (explore == true && mounted) await _explore();
+  }
+
+  Future<void> _explore() async {
+    final selected = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (routeContext) => InterestsPage(
+          onStart: (values) async {
+            await flow.saveInterests(values);
+            if (flow.error != null) return false;
+            if (routeContext.mounted) Navigator.pop(routeContext, true);
+            return true;
+          },
+        ),
+      ),
+    );
+    if (selected == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PlazaPage(
+            onChat: _homeChat,
+            onVoice: () => _homeChat(record: true),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _homeDiscovery(int index) async {
+    if (flow.discoveryCount > index) {
+      await detail(index);
+      if (mounted && input.text.isNotEmpty) await _homeChat();
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlazaPage(
+          onChat: _homeChat,
+          onVoice: () => _homeChat(record: true),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.registrationCompleted && !widget.returningUser
+      ? !flow.ready
+            ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+            : ChatPage(
+                messages: flow.chatMessages,
+                busy: flow.busy || _finishingRegistration,
+                error: _registrationError ?? flow.error,
+                onSend: (text) async {
+                  await flow.send(text);
+                  return flow.error == null;
+                },
+                onVoiceRecorded: flow.saveVoice,
+                onExit: _finishRegistrationChat,
+                onExplore: () => _finishRegistrationChat(explore: true),
+              )
+      : _showOnboarding
+      ? OnboardingFlow(
+          initialPageId: widget.previewWelcomeOnStart
+              ? null
+              : flow.onboardingPageId,
+          busy: flow.busy,
+          error: flow.error,
+          onAdvance: _advanceOnboarding,
+          onComplete: () => setState(() => _welcomePreviewDismissed = true),
+        )
+      : _showHome
+      ? HomePage(
+          onMenu: _homeMenu,
+          onFriends: () => _notice('好友功能尚未开放'),
+          onExplore: _explore,
+          onChat: _homeChat,
+          onVoice: () => _homeChat(record: true),
+          onDiscovery: _homeDiscovery,
+          discoveries: flow.discoveryCount == 0
+              ? HomePage.designDiscoveries
+              : [
+                  for (var i = 0; i < flow.discoveryCount; i++)
+                    HomeDiscovery(
+                      description: flow.isRead(i) ? '已读发现' : '探索带回了新发现：',
+                      title: flow.discoveryTitle(i),
+                      style: i == 0
+                          ? DiscoveryStyle.blue
+                          : DiscoveryStyle.purple,
+                    ),
+                ],
+        )
+      : Scaffold(
+          appBar: AppBar(
+            title: const Text('ViiTor · 流程验证'),
+            leading: _showFlowTools
+                ? IconButton(
+                    tooltip: '返回首页',
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => setState(() => _showFlowTools = false),
+                  )
+                : null,
+            actions: [
+              IconButton(
+                tooltip: '启动页预览',
+                icon: const Icon(Icons.palette_outlined),
+                onPressed: () => Navigator.pushNamed(context, '/splash'),
+              ),
+              IconButton(
+                tooltip: '角色待机预览',
+                icon: const Icon(Icons.auto_awesome),
+                onPressed: () =>
+                    Navigator.pushNamed(context, '/character-preview'),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'demoPush') {
+                    final scheduled = await push.scheduleDemo();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          scheduled
+                              ? '已安排本地通知。现在回到桌面，约 5 秒后点击通知。'
+                              : push.error ?? '仅支持 iOS 调试版。',
+                        ),
+                      ),
+                    );
+                  } else if (value == 'copyPushToken') {
+                    if (!kDebugMode) return;
+                    await push.refresh();
+                    String message;
+                    final token = push.token;
+                    if (!push.supported) {
+                      message = 'APNs 测试仅支持 iOS。';
+                    } else if (token != null && token.isNotEmpty) {
+                      try {
+                        await Clipboard.setData(ClipboardData(text: token));
+                        message = '已复制 APNs token，可粘贴到苹果推送控制台。';
+                      } catch (_) {
+                        message = '复制失败，请重试。';
+                      }
+                    } else {
+                      if (push.allowed) {
+                        await push.register();
+                      } else {
+                        await push.request();
+                      }
+                      message =
+                          push.error ??
+                          (push.allowed
+                              ? '已请求 APNs 注册，请稍等后再次点击复制。'
+                              : '请在系统设置中允许通知后重试。');
+                    }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(message)));
+                  } else if (value == 'auth') {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => LoginDemoPage(service: account),
+                      ),
+                    );
+                  } else {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('重置模拟体验？'),
+                        content: const Text('仅清除本地模拟进度和聊天，不影响真实登录凭证。'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('取消'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('重置'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      input.clear();
+                      await flow.reset();
+                    }
+                  }
+                },
+                itemBuilder: (_) => const [
+                  if (kDebugMode)
+                    PopupMenuItem(
+                      value: 'demoPush',
+                      child: Text('5 秒后发送本地测试通知'),
+                    ),
+                  if (kDebugMode)
+                    PopupMenuItem(
+                      value: 'copyPushToken',
+                      child: Text('复制 APNs token'),
+                    ),
+                  PopupMenuItem(value: 'auth', child: Text('账号联调页')),
+                  PopupMenuItem(value: 'reset', child: Text('重置模拟体验')),
+                ],
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                FilledButton.icon(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/welcome-preview'),
+                  icon: const Icon(Icons.waving_hand_outlined),
+                  label: const Text('引导页预览'),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '模拟环境 · 占位 UI · 与真实账号隔离',
+                  style: TextStyle(color: Colors.deepOrange),
+                ),
+                const SizedBox(height: 20),
+                if (flow.error != null)
+                  Text(flow.error!, style: const TextStyle(color: Colors.red)),
+                if (!flow.ready) action('加载 / 重试', flow.load) else ...content(),
+              ],
+            ),
+          ),
+        );
 }

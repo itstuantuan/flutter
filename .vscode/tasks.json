@@ -19,7 +19,7 @@
       "args": [
         "${workspaceFolder}/scripts/configure_google_sign_in.py",
         "--config",
-        "${workspaceFolder}/env/production.json"
+        "${workspaceFolder}/env/production.local.json"
       ],
       "problemMatcher": []
     }

@@ -1,0 +1,33 @@
+<svg width="237" height="40" viewBox="0 0 237 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<mask id="mask0_305_4238" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="237" height="40">
+<path d="M4.76081e-08 1.08916L237 0L215.795 19.5006L237 40L0.0235775 39.9527L0.19875 21.0534L4.76081e-08 1.08916Z" fill="url(#paint0_linear_305_4238)"/>
+</mask>
+<g mask="url(#mask0_305_4238)">
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 214.016 -10.3144)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 214.016 15.6406)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 188.031 15.6406)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 188.031 -10.3144)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 162.051 -8.45897)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 162.051 17.4922)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 136.059 17.4922)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 136.059 -8.45897)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 110.078 -8.45897)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 110.078 17.4922)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 84.0977 17.4922)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 84.0977 -8.45897)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 58.1094 -8.45897)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 58.1094 17.4922)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 32.1289 17.4922)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 32.1289 -8.45897)" fill="#691AB3"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 8 -8.45897)" fill="#A64BFB"/>
+<rect width="25.9532" height="25.9839" transform="matrix(4.37631e-08 1 1 -4.36597e-08 8 17.4922)" fill="#691AB3"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_305_4238" x1="32.5" y1="16.5658" x2="229.122" y2="36.0267" gradientUnits="userSpaceOnUse">
+<stop stop-color="#963AB1" stop-opacity="0.21"/>
+<stop offset="0.5" stop-color="#69228F" stop-opacity="0.64"/>
+<stop offset="1" stop-color="#3D0A6C" stop-opacity="0.24"/>
+</linearGradient>
+</defs>
+</svg>
+

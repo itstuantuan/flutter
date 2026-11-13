@@ -1,5 +1,7 @@
 /// 由 --dart-define-from-file 注入，修改配置后需要停止并重新运行。
 abstract final class AppEnv {
+  static const enableTestTools = bool.fromEnvironment('ENABLE_TEST_TOOLS');
+
   static const name = String.fromEnvironment(
     'APP_ENV',
     defaultValue: 'development',

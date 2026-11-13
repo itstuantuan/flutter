@@ -55,6 +55,38 @@ void main() {
     service = create();
   });
 
+  test('测试重置清除会话和注册历史，并持久保存一次性新用户标记', () async {
+    await store.write(AccountSession.fromJson(loginData()));
+    await store.resetForNewUserTest();
+    final reopened = SecureSessionStore(namespace: 'test');
+    expect(await reopened.read(), isNull);
+    expect(await reopened.hasCompletedRegistration(), isFalse);
+    expect(await reopened.consumeNewUserTest(), isTrue);
+    expect(await reopened.consumeNewUserTest(), isFalse);
+  });
+
+  test('测试标记让已有手机号登录进入新用户流程，且只消费一次', () async {
+    await store.resetForNewUserTest();
+    adapter.response = {'status': 0, 'data': loginData(registered: 0)};
+    final session = await service.phoneVerifyLogin(
+      phone: '86-15010887212',
+      code: '1234',
+      uuid: 'device',
+    );
+    expect(session.isNewUser, isFalse);
+    expect(
+      service.testNewUser,
+      const bool.fromEnvironment('ENABLE_TEST_TOOLS'),
+    );
+    await service.logout();
+    await service.phoneVerifyLogin(
+      phone: '86-15010887212',
+      code: '1234',
+      uuid: 'device',
+    );
+    expect(service.testNewUser, isFalse);
+  });
+
   test('支持后端新增的 bots 产品，签名头与请求体保持一致', () async {
     final dio = Dio()..httpClientAdapter = adapter;
     final bots = AccountService(
@@ -160,6 +192,7 @@ void main() {
   });
 
   test('登录保留验证码前导零，保存恢复和退出；首次注册语义', () async {
+    expect(await service.hasCompletedRegistration(), isFalse);
     adapter.response = {'status': 0, 'data': loginData(registered: 1)};
     final session = await service.phoneVerifyLogin(
       phone: '86-15010887212',
@@ -178,6 +211,45 @@ void main() {
     await restarted.logout();
     expect(restarted.session, null);
     expect(await create().restoreSession(), null);
+    expect(await create().hasCompletedRegistration(), isTrue);
+  });
+
+  test('注册失败和异常响应不会关闭引导，已有账号登录成功也关闭引导', () async {
+    for (final response in [
+      {'status': 3},
+      {'status': 0},
+      {
+        'status': 0,
+        'data': {...loginData(), 'token': ''},
+      },
+    ]) {
+      adapter.response = response;
+      await expectLater(
+        service.phoneVerifyLogin(
+          phone: '86-15010887212',
+          code: '1234',
+          uuid: 'device',
+        ),
+        throwsA(isA<Exception>()),
+      );
+      expect(await service.hasCompletedRegistration(), isFalse);
+    }
+    adapter.response = {'status': 0, 'data': loginData(registered: 0)};
+    await service.phoneVerifyLogin(
+      phone: '86-15010887212',
+      code: '1234',
+      uuid: 'device',
+    );
+    expect(await create().hasCompletedRegistration(), isTrue);
+  });
+
+  test('旧版本已登录用户迁移注册记录，退出后仍保留', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'bots.account.session.test': jsonEncode(loginData()),
+    });
+    expect(await service.hasCompletedRegistration(), isTrue);
+    await service.logout();
+    expect(await create().hasCompletedRegistration(), isTrue);
   });
 
   test('移动端自动读取uuid，ip默认空；Web不传uuid', () async {

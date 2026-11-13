@@ -1,0 +1,14 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="315" height="175.187" viewBox="0 0 315 175.187" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 2085665247">
+<foreignObject x="-9.8" y="-5.90695" width="334.6" height="190.894"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(4.9px);clip-path:url(#bgblur_0_0_71_clip_path);height:100%;width:100%"></div></foreignObject><rect id="Rectangle 6433" data-figma-bg-blur-radius="9.8" y="3.89305" width="315" height="171.294" rx="24" fill="url(#paint0_linear_0_71)" fill-opacity="0.86"/>
+<path id="Star 84" d="M86.3258 0L86.6413 1.92814C86.7777 2.7616 87.4229 3.41957 88.2536 3.57222L89.9993 3.89305L88.2536 4.21387C87.4229 4.36653 86.7777 5.0245 86.6413 5.85796L86.3258 7.7861L86.0103 5.85796C85.8739 5.02449 85.2287 4.36653 84.3981 4.21387L82.6523 3.89305L84.3981 3.57222C85.2287 3.41957 85.8739 2.7616 86.0103 1.92813L86.3258 0Z" fill="white" fill-opacity="0.5"/>
+<path id="Star 85" d="M93.6727 1.94652L93.7167 2.2158C93.8531 3.04927 94.4983 3.70724 95.329 3.85989L95.5094 3.89305L95.329 3.92621C94.4983 4.07886 93.8531 4.73683 93.7167 5.57029L93.6727 5.83957L93.6286 5.57029C93.4922 4.73683 92.847 4.07886 92.0164 3.92621L91.8359 3.89305L92.0164 3.85989C92.847 3.70724 93.4922 3.04927 93.6286 2.2158L93.6727 1.94652Z" fill="white" fill-opacity="0.5"/>
+</g>
+<defs>
+<clipPath id="bgblur_0_0_71_clip_path" transform="translate(9.8 5.90695)"><rect y="3.89305" width="315" height="171.294" rx="24"/>
+</clipPath><linearGradient id="paint0_linear_0_71" x1="157.5" y1="3.89305" x2="157.5" y2="175.187" gradientUnits="userSpaceOnUse">
+<stop stop-color="#0DB9FC"/>
+<stop offset="1" stop-color="#C3BEFF"/>
+</linearGradient>
+</defs>
+</svg>

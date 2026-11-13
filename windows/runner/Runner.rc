@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.viitor" "\0"
-            VALUE "FileDescription", "Bots" "\0"
+            VALUE "FileDescription", "Pals" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "Bots" "\0"
+            VALUE "InternalName", "Pals" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.viitor. All rights reserved." "\0"
             VALUE "OriginalFilename", "bots.exe" "\0"
-            VALUE "ProductName", "Bots" "\0"
+            VALUE "ProductName", "Pals" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

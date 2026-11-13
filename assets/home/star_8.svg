@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Star 17" opacity="0.33">
+<use xlink:href="#stroke0_0_104" fill="#D9D9D9"/>
+<use xlink:href="#stroke0_0_104" fill="#2BB1E2"/>
+<mask id="stroke1_0_104" fill="white">
+<path d="M4 0L5.08036 2.91964L8 4L5.08036 5.08036L4 8L2.91964 5.08036L0 4L2.91964 2.91964L4 0Z"/>
+</mask>
+<path d="M4 0L5.08036 2.91964L8 4L5.08036 5.08036L4 8L2.91964 5.08036L0 4L2.91964 2.91964L4 0Z" stroke-width="2" stroke="white" mask="url(#stroke1_0_104)"/>
+</g>
+<defs>
+<path id="stroke0_0_104" d="M4 0L5.08036 2.91964L8 4L5.08036 5.08036L4 8L2.91964 5.08036L0 4L2.91964 2.91964L4 0Z"/>
+</defs>
+</svg>

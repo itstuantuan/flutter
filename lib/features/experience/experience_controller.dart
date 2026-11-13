@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'experience_store.dart';
+import '../chat/chat_message.dart';
 
 enum ExperienceStep {
   welcome,
@@ -35,6 +36,20 @@ class ExperienceController extends ChangeNotifier {
   String? error;
   ExperienceStep get step =>
       ExperienceStep.values.byName(_data['step'] as String);
+  String? get onboardingPageId =>
+      _data['onboardingPageId'] as String? ??
+      (step == ExperienceStep.world ? 'world' : null);
+
+  Future<void> advanceOnboarding(String? nextPageId) => _save({
+    'onboardingPageId': nextPageId,
+    // Keep compatibility with existing mock-flow steps and old saved progress.
+    'step': nextPageId == null
+        ? 'name'
+        : nextPageId == 'world'
+        ? 'world'
+        : 'welcome',
+  });
+
   String get name => _data['name'] as String? ?? '';
   DemoCharacter get character => demoCharacters.firstWhere(
     (c) => c.id == _data['character'],
@@ -44,6 +59,30 @@ class ExperienceController extends ChangeNotifier {
       List<String>.from(_data['interests'] as List? ?? []);
   List<String> get messages =>
       List<String>.from(_data['messages'] as List? ?? []);
+  List<ChatMessage> get chatMessages {
+    final saved = _data['chatMessages'];
+    return saved is List
+        ? saved
+              .map(
+                (entry) => ChatMessage.fromJson(
+                  Map<String, dynamic>.from(entry as Map),
+                ),
+              )
+              .toList()
+        : messages.map(ChatMessage.fromStored).toList();
+  }
+
+  Future<bool> saveVoice(VoiceClip clip) async {
+    if (busy || clip.ephemeral) return false;
+    await _save({
+      'chatMessages': [
+        ...chatMessages.map((message) => message.toJson()),
+        ChatMessage('', isUser: true, voice: clip).toJson(),
+      ],
+    });
+    return error == null;
+  }
+
   bool get muted => _data['muted'] == true;
   bool get hasTask => _data['startedAt'] != null;
   int get elapsed => hasTask
@@ -115,6 +154,9 @@ class ExperienceController extends ChangeNotifier {
     await _save({'character': id, 'step': 'chat'});
   }
 
+  Future<void> saveInterests(List<String> values) =>
+      _save({'interests': values.toSet().toList()});
+
   Future<void> toggleMute() => _save({'muted': !muted});
   Future<void> toggleInterest(String value) {
     final selected = interests;
@@ -127,6 +169,11 @@ class ExperienceController extends ChangeNotifier {
     final detected = {...interests, ...interestOptions.where(text.contains)};
     await _save({
       'interests': detected.toList(),
+      'chatMessages': [
+        ...chatMessages.map((message) => message.toJson()),
+        ChatMessage(text.trim(), isUser: true).toJson(),
+        const ChatMessage('谢谢你分享！我记住了，我们可以围绕这些兴趣一起探索。（模拟回复）').toJson(),
+      ],
       'messages': [
         ...messages,
         '你：${text.trim()}',

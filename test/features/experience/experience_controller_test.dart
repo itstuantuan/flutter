@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:bots/features/chat/chat_message.dart';
 import 'package:bots/features/experience/experience_controller.dart';
 import 'package:bots/features/experience/experience_store.dart';
 
@@ -15,6 +16,47 @@ class MemoryStore implements ExperienceStore {
 }
 
 void main() {
+  test('文字和真实录音按顺序保存，重开恢复且不伪造语音回复', () async {
+    final store = MemoryStore();
+    final flow = ExperienceController(store);
+    await flow.load();
+    await flow.send('你好');
+    const clip = VoiceClip(
+      path: '/tmp/saved.m4a',
+      duration: Duration(seconds: 3),
+    );
+    expect(await flow.saveVoice(clip), isTrue);
+    await flow.send('下一条');
+    final restored = ExperienceController(store);
+    await restored.load();
+    expect(restored.chatMessages, hasLength(5));
+    expect(restored.chatMessages[2].voice?.path, clip.path);
+    expect(restored.chatMessages[2].voice?.duration, clip.duration);
+    expect(restored.chatMessages[3].text, '下一条');
+    store.fail = true;
+    expect(await flow.saveVoice(clip), isFalse);
+    expect(flow.chatMessages, hasLength(5));
+    flow.dispose();
+    restored.dispose();
+  });
+
+  test('新增引导页按固定 ID 保存恢复，完成只推进模拟流程', () async {
+    final store = MemoryStore();
+    final flow = ExperienceController(store);
+    await flow.load();
+    await flow.advanceOnboarding('new-feature');
+    final restored = ExperienceController(store);
+    await restored.load();
+    expect(restored.onboardingPageId, 'new-feature');
+    expect(restored.step, ExperienceStep.welcome);
+    await restored.advanceOnboarding(null);
+    expect(restored.step, ExperienceStep.name);
+    expect(restored.onboardingPageId, isNull);
+    expect(store.data?['onboardingCompleted'], isNull);
+    flow.dispose();
+    restored.dispose();
+  });
+
   test('恢复角色、兴趣、任务和已读；重复开始不重置任务', () async {
     final store = MemoryStore();
     var now = DateTime.utc(2026, 11, 10);

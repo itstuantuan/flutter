@@ -46,9 +46,37 @@ class AccountService {
   final Set<String> _sending = {};
   bool _sessionBusy = false;
   AccountSession? _session;
+  bool testNewUser = false;
+
+  Future<void> resetForNewUserTest() => _withSessionLock(() async {
+    if (!AppEnv.enableTestTools) throw StateError('测试入口未启用');
+    final storage = store;
+    if (storage is! SecureSessionStore) throw StateError('不支持重置此存储');
+    await storage.resetForNewUserTest();
+    _session = null;
+    testNewUser = false;
+    _nextSend.clear();
+  });
+
+  Future<void> _consumeNewUserTest() async {
+    final storage = store;
+    testNewUser =
+        AppEnv.enableTestTools &&
+        storage is SecureSessionStore &&
+        await storage.consumeNewUserTest();
+  }
 
   /// 本地凭证，不代表服务器已验证 token 仍有效。
   AccountSession? get session => _session;
+
+  /// Registration history survives logout; it must not be used for auth.
+  Future<bool> hasCompletedRegistration() async {
+    final storage = store;
+    if (storage is RegistrationHistoryStore) {
+      return (storage as RegistrationHistoryStore).hasCompletedRegistration();
+    }
+    return await storage.read() != null;
+  }
 
   RequestSigner get _signer {
     final signer = client.signer;
@@ -149,6 +177,7 @@ class AccountService {
       throw ApiDecodeException('登录响应的账号、产品或平台与请求不一致');
     }
     await store.write(result);
+    await _consumeNewUserTest();
     _session = result;
     return result;
   });
@@ -210,6 +239,7 @@ class AccountService {
       throw ApiDecodeException('Google 登录响应的账号、产品或平台与请求不一致');
     }
     await store.write(result);
+    await _consumeNewUserTest();
     _session = result;
     return result;
   });

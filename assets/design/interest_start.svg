@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="222" height="50" viewBox="0 0 222 50" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="&#231;&#159;&#169;&#229;&#189;&#162;">
+<use xlink:href="#stroke0_0_33" fill="#D9D9D9"/>
+<use xlink:href="#stroke0_0_33" fill="url(#paint0_linear_0_33)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_33" x1="0" y1="25" x2="222" y2="25" gradientUnits="userSpaceOnUse">
+<stop stop-color="#2EA5EF"/>
+<stop offset="1" stop-color="#A43ADD"/>
+</linearGradient>
+<path id="stroke0_0_33" d="M0 25C0 11.1929 11.1929 0 25 0L197 0C210.807 0 222 11.1929 222 25C222 38.8071 210.807 50 197 50H25C11.1929 50 0 38.8071 0 25Z" fill-rule="evenodd" clip-rule="evenodd"/>
+</defs>
+</svg>

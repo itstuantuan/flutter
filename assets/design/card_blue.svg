@@ -1,0 +1,14 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="315" height="185" viewBox="0 0 315 185" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 2085665247">
+<foreignObject x="-9.8" y="-9.8" width="334.6" height="204.6"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(4.9px);clip-path:url(#bgblur_0_0_94_clip_path);height:100%;width:100%"></div></foreignObject><rect id="Rectangle 6433" data-figma-bg-blur-radius="9.8" width="315" height="185" rx="24" fill="url(#paint0_linear_0_94)" fill-opacity="0.86"/>
+<path id="Star 84" d="M291 13L291.81 18.002C291.944 18.8355 292.588 19.4945 293.419 19.6488L298 20.5L293.419 21.3512C292.588 21.5055 291.944 22.1645 291.81 22.998L291 28L290.19 22.998C290.056 22.1645 289.412 21.5055 288.581 21.3512L284 20.5L288.581 19.6488C289.412 19.4945 290.056 18.8355 290.19 18.002L291 13Z" fill="white" fill-opacity="0.5"/>
+<path id="Star 85" d="M300.428 10L300.705 11.5946C300.849 12.4271 301.501 13.0791 302.334 13.2235L303.928 13.5L302.334 13.7765C301.501 13.9209 300.849 14.5729 300.705 15.4054L300.428 17L300.152 15.4054C300.008 14.5729 299.356 13.9209 298.523 13.7765L296.928 13.5L298.523 13.2235C299.356 13.0791 300.008 12.4271 300.152 11.5946L300.428 10Z" fill="white" fill-opacity="0.5"/>
+</g>
+<defs>
+<clipPath id="bgblur_0_0_94_clip_path" transform="translate(9.8 9.8)"><rect width="315" height="185" rx="24"/>
+</clipPath><linearGradient id="paint0_linear_0_94" x1="157.5" y1="0" x2="157.5" y2="185" gradientUnits="userSpaceOnUse">
+<stop stop-color="#0DB9FC"/>
+<stop offset="1" stop-color="#C3BEFF"/>
+</linearGradient>
+</defs>
+</svg>

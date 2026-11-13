@@ -1,11 +1,11 @@
 {
-    "name": "Bots",
-    "short_name": "Bots",
+    "name": "Pals",
+    "short_name": "Pals",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Bots Flutter application.",
+    "description": "Pals Flutter application.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

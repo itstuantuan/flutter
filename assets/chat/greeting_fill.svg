@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="343" height="79" viewBox="0 0 343 79" fill="none" xmlns="http://www.w3.org/2000/svg">
+<foreignObject x="-4.4" y="-4.4" width="351.8" height="87.8"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(2.2px);clip-path:url(#bgblur_0_0_53_clip_path);height:100%;width:100%"></div></foreignObject><path id="Rectangle 6214" data-figma-bg-blur-radius="4.4" d="M0 10C0 4.47715 4.47715 0 10 0H333C338.523 0 343 4.47715 343 10V69C343 74.5228 338.523 79 333 79H10C4.47716 79 0 74.5228 0 69V10Z" fill="black" fill-opacity="0.55"/>
+<defs>
+<clipPath id="bgblur_0_0_53_clip_path" transform="translate(4.4 4.4)"><path d="M0 10C0 4.47715 4.47715 0 10 0H333C338.523 0 343 4.47715 343 10V69C343 74.5228 338.523 79 333 79H10C4.47716 79 0 74.5228 0 69V10Z"/>
+</clipPath></defs>
+</svg>

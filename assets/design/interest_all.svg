@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="112" height="50" viewBox="0 0 112 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="&#231;&#159;&#169;&#229;&#189;&#162;">
+<path d="M0 25C0 11.1929 11.1929 0 25 0L87 0C100.807 0 112 11.1929 112 25C112 38.8071 100.807 50 87 50H25C11.1929 50 0 38.8071 0 25Z" fill-rule="evenodd" clip-rule="evenodd" fill="white" fill-opacity="0.57"/>
+<mask id="stroke0_0_34" fill="white">
+<path d="M0 25C0 11.1929 11.1929 0 25 0L87 0C100.807 0 112 11.1929 112 25C112 38.8071 100.807 50 87 50H25C11.1929 50 0 38.8071 0 25Z" fill-rule="evenodd" clip-rule="evenodd"/>
+</mask>
+<path d="M25 50H87C100.807 50 112 38.8071 112 25C112 11.1929 100.807 0 87 0L25 0C11.1929 0 0 11.1929 0 25C0 38.8071 11.1929 50 25 50Z" stroke-width="2" stroke="white" stroke-opacity="0.08" mask="url(#stroke0_0_34)"/>
+</g>
+</svg>

@@ -1,0 +1,14 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="3" height="2.99645" viewBox="0 0 3 2.99645" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Star 16">
+<use xlink:href="#stroke0_0_30" fill="#D9D9D9"/>
+<use xlink:href="#stroke0_0_30" fill="url(#paint0_linear_0_30)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_30" x1="0.138158" y1="2.51488" x2="3.07155" y2="0.964107" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5EB7FF"/>
+<stop offset="0.501079" stop-color="#7E83FF"/>
+<stop offset="1" stop-color="#E867FF"/>
+</linearGradient>
+<path id="stroke0_0_30" d="M1.5 0L1.90514 1.09357L3 1.49823L1.90514 1.90288L1.5 2.99645L1.09486 1.90288L0 1.49823L1.09486 1.09357L1.5 0Z"/>
+</defs>
+</svg>
