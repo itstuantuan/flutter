@@ -1,6 +1,6 @@
 {
   "APP_ENV": "production",
-  "API_BASE_URL": "",
+  "API_BASE_URL": "https://bot-test.viitor.live",
   "API_PRODUCT": "",
   "API_PLATFORM": "",
   "API_SECRET_KEY": "",

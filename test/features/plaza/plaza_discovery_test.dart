@@ -3,13 +3,22 @@ import 'package:bots/features/plaza/plaza_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'discovery_fixtures.dart';
+
 void main() {
   testWidgets('discovery pages select content and dismiss back to plaza', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      const MaterialApp(home: PlazaPage(initialDiscovery: 0)),
+      const MaterialApp(home: PlazaPage(discoveries: discoveryFixtures)),
     );
+    await tester.pumpAndSettle();
+    expect(find.byType(PlazaDiscoveryDialog), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('plaza-discovery-trigger')));
     await tester.pumpAndSettle();
     expect(find.byType(PlazaDiscoveryDialog), findsOneWidget);
     await tester.drag(
@@ -21,7 +30,7 @@ void main() {
     await tester.tap(find.text('查看内容').hitTestable());
     await tester.pumpAndSettle();
     expect(find.byType(PlazaDiscoveryDialog), findsNothing);
-    expect(find.text(PlazaDiscovery.samples[1].body), findsOneWidget);
+    expect(find.text(discoveryFixtures[1].body), findsOneWidget);
     await tester.tap(find.text('返回广场'));
     await tester.pumpAndSettle();
     expect(find.byType(PlazaPage), findsOneWidget);
@@ -48,7 +57,10 @@ void main() {
                     .copyWith(textScaler: TextScaler.linear(scale)),
                 child: child!,
               ),
-              home: const PlazaPage(initialDiscovery: 0),
+              home: const PlazaPage(
+                initialDiscovery: 0,
+                discoveries: discoveryFixtures,
+              ),
             ),
           );
           await tester.pumpAndSettle();
@@ -73,7 +85,9 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      const MaterialApp(home: PlazaPage(initialDiscovery: 0)),
+      const MaterialApp(
+        home: PlazaPage(initialDiscovery: 0, discoveries: discoveryFixtures),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(10, 80));

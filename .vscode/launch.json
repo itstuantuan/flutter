@@ -2,6 +2,45 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "iPhone 真机调试（开发签名）",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "deviceId": "06c88ab4baddcf01936233c3a1b2ce51c63b3b9e",
+      "toolArgs": [
+        "--dart-define-from-file=env/development.local.json"
+      ],
+      "preLaunchTask": "Prepare Google OAuth development"
+    },
+    {
+      "name": "iPhone 真机 Release（开发签名）",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "deviceId": "06c88ab4baddcf01936233c3a1b2ce51c63b3b9e",
+      "env": {
+        "XCODE_XCCONFIG_FILE": "${workspaceFolder}/ios/Flutter/DeviceRelease.xcconfig"
+      },
+      "toolArgs": [
+        "--dart-define-from-file=env/development.local.json"
+      ],
+      "preLaunchTask": "Prepare Google OAuth development"
+    },
+    {
+      "name": "iPhone 真机 Release（正式接口·开发签名）",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "deviceId": "06c88ab4baddcf01936233c3a1b2ce51c63b3b9e",
+      "env": {
+        "XCODE_XCCONFIG_FILE": "${workspaceFolder}/ios/Flutter/DeviceRelease.xcconfig"
+      },
+      "toolArgs": [
+        "--dart-define-from-file=env/production.local.json"
+      ],
+      "preLaunchTask": "Prepare Google OAuth production"
+    },
+    {
       "name": "Flutter Debug",
       "request": "launch",
       "type": "dart",

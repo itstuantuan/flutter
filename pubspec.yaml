@@ -17,9 +17,11 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   flutter_svg: ^2.3.4
   google_sign_in: ^7.2.0
+  image_picker: ^1.2.4
   json_annotation: ^4.12.0
   path_provider: ^2.1.6
   record: ^7.2.0
+  speech_to_text: ^7.5.0
   web: ^1.1.2
 
 dev_dependencies:
@@ -36,6 +38,7 @@ flutter:
     - assets/characters/viitor_splash.png
     - assets/splash/
     - assets/onboarding/
+    - assets/sidebar/
     - assets/home/
     - assets/design/
     - assets/chat/

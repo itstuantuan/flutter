@@ -1,0 +1,7 @@
+{
+  "fileKey": "Ee34W01RdusrU2afb7rvhP",
+  "nodeId": "409:3552",
+  "asset": "pals_app_icon.png",
+  "source": "Figma node export",
+  "regenerate": "swift scripts/generate_app_icons.swift"
+}

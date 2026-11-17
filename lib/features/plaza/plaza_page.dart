@@ -14,11 +14,17 @@ import 'package:flutter_svg/flutter_svg.dart';
 class PlazaPage extends StatefulWidget {
   const PlazaPage({
     super.key,
+    this.displayName = '',
     this.onChat,
     this.onVoice,
     this.initialDiscovery,
+    this.discoveries = const [],
+    this.onDiscovery,
   });
+  final String displayName;
   final int? initialDiscovery;
+  final List<PlazaDiscovery> discoveries;
+  final VoidCallback? onDiscovery;
   final VoidCallback? onChat, onVoice;
   @override
   State<PlazaPage> createState() => _PlazaPageState();
@@ -27,6 +33,7 @@ class PlazaPage extends StatefulWidget {
 class _PlazaPageState extends State<PlazaPage> {
   static final _picker = PlazaScenarioPicker();
   late final _scenario = _picker.next();
+  bool _discoveryOpen = false;
 
   @override
   void initState() {
@@ -39,41 +46,57 @@ class _PlazaPageState extends State<PlazaPage> {
   }
 
   Future<void> _showDiscovery() async {
-    final selected = await showPlazaDiscoveries(
-      context,
-      initialPage: widget.initialDiscovery ?? 0,
-    );
-    if (!mounted || selected == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                selected.title,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                selected.body,
-                style: const TextStyle(fontSize: 16, height: 1.6),
-              ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('返回广场'),
-              ),
-            ],
+    if (widget.onDiscovery != null) {
+      widget.onDiscovery!();
+      return;
+    }
+    if (_discoveryOpen) return;
+    if (widget.discoveries.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('当前暂无探索发现')));
+      return;
+    }
+    _discoveryOpen = true;
+    try {
+      final selected = await showPlazaDiscoveries(
+        context,
+        initialPage: widget.initialDiscovery ?? 0,
+        discoveries: widget.discoveries,
+      );
+      if (!mounted || selected == null) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  selected.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  selected.body,
+                  style: const TextStyle(fontSize: 16, height: 1.6),
+                ),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('返回广场'),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _discoveryOpen = false;
+    }
   }
 
   void _chat(BuildContext context, bool voice) {
@@ -178,6 +201,22 @@ class _PlazaPageState extends State<PlazaPage> {
                 ),
               ),
               Positioned(
+                left: (constraints.maxWidth - 375 * scale) / 2 + 110 * scale,
+                top: 320 * scale,
+                width: 150 * scale,
+                height: 240 * scale,
+                child: Semantics(
+                  button: true,
+                  label: '查看广场发现',
+                  child: GestureDetector(
+                    key: const ValueKey('plaza-discovery-trigger'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _showDiscovery,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+              Positioned(
                 bottom: math.max(safe.bottom, 34) + 73,
                 height: math.min(
                   170 * MediaQuery.textScalerOf(context).scale(14) / 14,
@@ -191,7 +230,10 @@ class _PlazaPageState extends State<PlazaPage> {
                 ),
                 left: (constraints.maxWidth - width) / 2 + 22,
                 right: (constraints.maxWidth - width) / 2 + 22,
-                child: PlazaDialogue(scenario: _scenario),
+                child: PlazaDialogue(
+                  scenario: _scenario,
+                  displayName: widget.displayName,
+                ),
               ),
               Positioned(
                 top: 0,

@@ -2,12 +2,16 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'chat_artwork.dart';
 
 import 'chat_message.dart';
+import 'chat_time.dart';
+import 'chat_typewriter.dart';
 import 'voice_capture.dart';
+import 'system_dictation.dart';
 import 'voice_playback.dart';
 import 'voice_storage.dart';
 
@@ -22,8 +26,10 @@ class ChatPage extends StatefulWidget {
     this.onSend,
     this.onVoiceRecorded,
     this.voiceCapture,
+    this.useSystemDictation = false,
+    this.dictation,
     this.voicePlayback,
-    this.name = 'Tony',
+    this.name = 'Pal',
     this.exitLabel = '跳过',
     this.initialDraft = '',
     this.initialRecordingPreview = false,
@@ -33,12 +39,25 @@ class ChatPage extends StatefulWidget {
     this.error,
     this.timeLabel,
     this.returningUser = false,
+    this.showWelcome = true,
+    this.anchorTurnId,
+    this.anchorMaterialId,
+    this.locationRevision = 0,
+    this.onAnchorVisible,
+    this.onDiscoveryVisible,
   });
-  final bool returningUser;
+  final bool returningUser, showWelcome;
+  final int? anchorTurnId;
+  final String? anchorMaterialId;
+  final int locationRevision;
+  final VoidCallback? onAnchorVisible;
+  final ValueChanged<String>? onDiscoveryVisible;
   final VoidCallback onExit, onExplore;
   final List<ChatMessage> messages;
   final Future<bool> Function(String text)? onSend;
   final Future<bool> Function(VoiceClip clip)? onVoiceRecorded;
+  final bool useSystemDictation;
+  final SystemDictation? dictation;
   final VoiceCapture? voiceCapture;
   final VoicePlayback? voicePlayback;
   final String name, exitLabel, initialDraft;
@@ -49,41 +68,122 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+class _ChatPageState extends State<ChatPage>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final _input = TextEditingController(text: widget.initialDraft);
   final _focus = FocusNode();
   final _scroll = ScrollController();
   late final _localMessages = [...widget.messages];
   late bool _recordingPreview = widget.initialRecordingPreview;
   late final _voice = widget.voiceCapture ?? VoiceCapture();
+  late final _dictation = widget.dictation ?? SystemDictation.shared;
+  bool _dictating = false;
+  bool _dictationSendPending = false;
+  String _draftBeforeDictation = '';
   VoicePlayback? _playback;
   StreamSubscription<void>? _playbackComplete;
   String? _playingPath;
   bool _sending = false;
+  final _turnKeys = <int, GlobalKey>{};
+  final _textKeys = <int, GlobalKey>{};
+  final _materialKeys = <String, GlobalKey>{};
+  String _materialKey(int? turn, Object? material) => '$turn:$material';
+  Timer? _highlightTimer;
+  Offset _exploreBannerOffset = Offset.zero;
+  bool _exploreBannerCollapsed = false;
+  late final _focusPulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+  final _typingTurns = <int>{};
+  int _anchorRequest = 0;
+  final _reportedTasks = <String>{};
+  int? _highlightedTurn;
   Future<bool>? _voiceSave;
   String? _error;
   final _ephemeralMessages = <ChatMessage>[];
-  late final _openedAt = DateTime.now();
 
   bool get _recording =>
       _recordingPreview || _voice.recording || _voice.pending != null;
-  int get _seconds => _voice.elapsed.inSeconds;
+  int get _seconds => _dictating || _dictationSendPending
+      ? _dictation.elapsed.inSeconds
+      : _voice.elapsed.inSeconds;
   List<ChatMessage> get _messages => [
     ...widget.onSend == null ? _localMessages : widget.messages,
     ..._ephemeralMessages,
   ];
-  bool get _busy => widget.busy || _sending || _voice.busy;
+  bool get _busy =>
+      _dictationSendPending ||
+      widget.busy ||
+      _sending ||
+      _voice.busy ||
+      (widget.useSystemDictation && _dictation.busy);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _voice.addListener(_refreshVoice);
+    if (widget.useSystemDictation) _dictation.addListener(_refreshDictation);
+    _scroll.addListener(_scheduleVisible);
+    if (widget.anchorTurnId != null) _scrollToAnchor();
+    _scheduleVisible();
     if (widget.startRecordingOnOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_startRecording());
       });
     }
+  }
+
+  void _refreshDictation() {
+    if (!mounted || !_dictating) return;
+    setState(() {
+      _error = _dictation.error;
+      // A completed utterance stays behind the original voice controls until
+      // the user explicitly sends or cancels it.
+      if (!_dictation.active &&
+          !_dictation.busy &&
+          _dictation.text.trim().isEmpty &&
+          !_dictationSendPending) {
+        _dictating = false;
+      }
+    });
+  }
+
+  Future<void> _finishDictation() async {
+    if (_busy || !_dictating || _dictationSendPending) return;
+    setState(() => _dictationSendPending = true);
+    try {
+      await _dictation.stop();
+      if (!mounted || !_dictationSendPending) return;
+      setState(() {
+        _dictationSendPending = false;
+        _dictating = false;
+      });
+      // No recognized speech must not accidentally send the previous draft.
+      if (_dictation.text.trim().isEmpty) return;
+      final draft = [
+        _draftBeforeDictation,
+        _dictation.text.trim(),
+      ].where((s) => s.isNotEmpty).join(' ');
+      _input.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+      await _send();
+    } finally {
+      if (mounted) setState(() => _dictationSendPending = false);
+    }
+  }
+
+  Future<void> _cancelDictation() async {
+    setState(() => _dictating = false);
+    await _dictation.cancel();
+    if (!mounted) return;
+    _input.value = TextEditingValue(
+      text: _draftBeforeDictation,
+      selection: TextSelection.collapsed(offset: _draftBeforeDictation.length),
+    );
   }
 
   void _refreshVoice() {
@@ -93,7 +193,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant ChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.messages.length != widget.messages.length) _scrollToLatest();
+    final previousText = {
+      for (final m in oldWidget.messages)
+        if (!m.isUser && m.turnId != null) m.turnId: m.text,
+    };
+    for (final message in widget.messages) {
+      if (!message.isUser &&
+          message.animateReply &&
+          message.turnId != null &&
+          previousText[message.turnId] != message.text) {
+        _typingTurns.add(message.turnId!);
+      }
+    }
+    _scheduleVisible();
+    if (oldWidget.locationRevision != widget.locationRevision ||
+        oldWidget.anchorTurnId != widget.anchorTurnId ||
+        oldWidget.anchorMaterialId != widget.anchorMaterialId) {
+      if (widget.anchorTurnId != null) _scrollToAnchor();
+    } else if (_highlightedTurn == null &&
+        (!_scroll.hasClients || _scroll.offset < 80) &&
+        (oldWidget.messages.length != widget.messages.length ||
+            oldWidget.messages.lastOrNull?.text !=
+                widget.messages.lastOrNull?.text ||
+            oldWidget.messages.map((m) => m.text).join() !=
+                widget.messages.map((m) => m.text).join())) {
+      _scrollToLatest();
+    }
   }
 
   Future<void> _startRecording() async {
@@ -105,6 +230,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       _error = null;
       _recordingPreview = false;
     });
+    if (widget.useSystemDictation) {
+      _draftBeforeDictation = _input.text;
+      setState(() => _dictating = true);
+      await _dictation.start();
+      return;
+    }
     await _voice.start();
   }
 
@@ -131,22 +262,24 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     try {
       // Browser blob URLs are scoped to this page lifetime and are never
       // persisted as if they were durable native files.
-      _voiceSave = clip.ephemeral || widget.onVoiceRecorded == null
+      _voiceSave = widget.onVoiceRecorded == null
           ? Future.value(true)
           : widget.onVoiceRecorded!(clip);
       final saved = await _voiceSave!;
       if (!mounted) return;
       if (!saved) {
-        setState(() => _error = '保存失败，录音已保留，请重试或取消。');
+        setState(() => _error = '发送失败，录音已保留，请重试或取消。');
         return;
       }
-      if (clip.ephemeral || widget.onVoiceRecorded == null) {
-        _ephemeralMessages.add(ChatMessage('', isUser: true, voice: clip));
+      if (widget.onVoiceRecorded == null) {
+        _ephemeralMessages.add(
+          ChatMessage('', isUser: true, voice: clip, createdAt: DateTime.now()),
+        );
       }
       _voice.accept();
       _scrollToLatest();
     } catch (_) {
-      if (mounted) setState(() => _error = '保存失败，录音已保留，请重试或取消。');
+      if (mounted) setState(() => _error = '发送失败，录音已保留，请重试或取消。');
     } finally {
       if (mounted) {
         setState(() {
@@ -200,13 +333,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       if (_voice.recording || (_voice.busy && _voice.pending == null)) {
         unawaited(_voice.cancel());
       }
+      _dictationSendPending = false;
+      if (_dictating) {
+        _dictating = false;
+        unawaited(_dictation.cancel());
+      }
       unawaited(_stopPlayback());
     }
   }
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (_busy || text.isEmpty) return;
+    if (_busy || _dictating || text.isEmpty) return;
     setState(() {
       _sending = true;
       _error = null;
@@ -215,19 +353,24 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       final sent = await widget.onSend?.call(text) ?? true;
       if (!mounted) return;
       if (!sent) {
-        setState(() => _error = '发送失败，请重试');
+        setState(() => _error = widget.error == null ? '发送失败，请重试' : null);
         return;
       }
       if (widget.onSend == null) {
         _localMessages.addAll([
-          ChatMessage(text, isUser: true),
-          const ChatMessage('谢谢你告诉我！你想先聊聊兴趣，还是一起探索这个世界？（模拟回复）'),
+          ChatMessage(text, isUser: true, createdAt: DateTime.now()),
+          ChatMessage(
+            '谢谢你告诉我！你想先聊聊兴趣，还是一起探索这个世界？（模拟回复）',
+            createdAt: DateTime.now(),
+          ),
         ]);
       }
       _input.clear();
       _scrollToLatest();
     } catch (_) {
-      if (mounted) setState(() => _error = '发送失败，请重试');
+      if (mounted) {
+        setState(() => _error = widget.error == null ? '发送失败，请重试' : null);
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -240,6 +383,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (widget.useSystemDictation) {
+      _dictation.removeListener(_refreshDictation);
+      if (_dictating) unawaited(_dictation.cancel());
+    }
     _voice.removeListener(_refreshVoice);
     unawaited(_closeVoice());
     unawaited(_playbackComplete?.cancel());
@@ -256,8 +403,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         unawaited(deleteVoiceFile(clip.path).catchError((_) {}));
       }
     }
+    _highlightTimer?.cancel();
+    _focusPulse.dispose();
     _input.dispose();
     _focus.dispose();
+    _scroll.removeListener(_scheduleVisible);
     _scroll.dispose();
     super.dispose();
   }
@@ -341,9 +491,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   );
 
   Widget _transcript({double bottomPadding = 0}) {
-    final time =
-        widget.timeLabel ??
-        '${_openedAt.hour.toString().padLeft(2, '0')}:${_openedAt.minute.toString().padLeft(2, '0')}';
+    final messages = _messages;
+    DateTime? previous;
+    final timestamps = <int, String>{};
+    for (var i = 0; i < messages.length; i++) {
+      final current = messages[i].createdAt;
+      if (showChatTime(previous, current)) {
+        timestamps[i] = formatChatTime(current!);
+      }
+      if (current != null) previous = current;
+    }
     final transcript = SingleChildScrollView(
       key: const ValueKey('chat-transcript'),
       physics: const ClampingScrollPhysics(),
@@ -353,25 +510,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1.5),
-            decoration: BoxDecoration(
-              color: const Color(0x66000000),
-              borderRadius: BorderRadius.circular(57),
-            ),
-            child: Text(
-              time,
-              style: const TextStyle(
-                inherit: false,
-                textBaseline: TextBaseline.alphabetic,
-                fontFamily: 'PingFang SC',
-                fontSize: 12,
-                height: 14 / 12,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
+          if (widget.timeLabel != null) _timestamp(widget.timeLabel!),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(
@@ -392,16 +531,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: 21),
-          SizedBox(
-            width: double.infinity,
-            child: ChatGreeting(name: widget.name),
-          ),
-          for (var i = 0; i < _messages.length; i++) ...[
+          if (widget.showWelcome)
+            SizedBox(
+              width: double.infinity,
+              child: ChatGreeting(name: widget.name),
+            ),
+          for (var i = 0; i < messages.length; i++) ...[
             SizedBox(height: i == 0 ? 24 : 16),
+            if (timestamps[i] != null) _timestamp(timestamps[i]!),
             if (_messages[i].voice case final clip?)
               _voiceBubble(clip)
             else
-              ChatBubble(text: _messages[i].text, isUser: _messages[i].isUser),
+              _messageBubble(_messages[i]),
           ],
         ],
       ),
@@ -418,6 +559,231 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             ).createShader(bounds),
             child: transcript,
           );
+  }
+
+  Widget _timestamp(String label) => Padding(
+    padding: const EdgeInsets.only(top: 8, bottom: 20),
+    child: Center(
+      child: Text(
+        label,
+        key: ValueKey('chat-time-$label'),
+        style: const TextStyle(
+          fontFamily: 'PingFang SC',
+          fontSize: 12,
+          color: Color(0xCCFFFFFF),
+          height: 1.5,
+          shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+        ),
+      ),
+    ),
+  );
+
+  Widget _locationNotice() => AnimatedSwitcher(
+    duration: MediaQuery.disableAnimationsOf(context) || !widget.animate
+        ? Duration.zero
+        : const Duration(milliseconds: 280),
+    transitionBuilder: (child, animation) => FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -.25), end: Offset.zero)
+            .animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+        child: child,
+      ),
+    ),
+    child: _highlightedTurn == null
+        ? const SizedBox.shrink()
+        : Center(
+            key: ValueKey('location-$_anchorRequest'),
+            child: Container(
+              key: const ValueKey('chat-location-notice'),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xF2351D55),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: const Color(0xFFFFDF84)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.my_location_rounded,
+                    size: 16,
+                    color: Color(0xFFFFDF84),
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    '已定位到这条发现',
+                    style: TextStyle(
+                      color: Color(0xFFFFDF84),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+  );
+
+  void _scheduleVisible() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted ||
+        !_scroll.hasClients ||
+        widget.onDiscoveryVisible == null ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
+    final viewport = _scroll.position.context.notificationContext
+        ?.findRenderObject();
+    if (viewport is! RenderBox || !viewport.hasSize) return;
+    final bounds = viewport.localToGlobal(Offset.zero) & viewport.size;
+    for (final message in widget.messages) {
+      final task = message.referenceTaskId;
+      if (task == null ||
+          message.cards.isEmpty ||
+          _reportedTasks.contains(task)) {
+        continue;
+      }
+      final box = _turnKeys[message.turnId]?.currentContext?.findRenderObject();
+      if (box is RenderBox &&
+          box.hasSize &&
+          bounds.overlaps(box.localToGlobal(Offset.zero) & box.size)) {
+        _reportedTasks.add(task);
+        widget.onDiscoveryVisible!(task);
+      }
+    }
+  });
+
+  void _scrollToAnchor() {
+    _highlightTimer?.cancel();
+    _focusPulse.stop();
+    _focusPulse.value = 0;
+    final request = ++_anchorRequest;
+    _highlightedTurn = widget.anchorTurnId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || request != _anchorRequest) return;
+      final id = widget.anchorTurnId;
+      final target =
+          _materialKeys[_materialKey(id, widget.anchorMaterialId)]
+              ?.currentContext ??
+          _turnKeys[id]?.currentContext;
+      if (target == null) return;
+      final duration = MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 550);
+      final message = widget.messages.where((m) => m.turnId == id).firstOrNull;
+      final title = message == null ? null : _anchorTitle(message);
+      final paragraph = _textKeys[id]?.currentContext?.findRenderObject();
+      final start = title == null ? -1 : message!.text.indexOf(title);
+      if (paragraph is RenderParagraph && start >= 0) {
+        final boxes = paragraph.getBoxesForSelection(
+          TextSelection(baseOffset: start, extentOffset: start + title!.length),
+        );
+        if (boxes.isNotEmpty) {
+          final offset = RenderAbstractViewport.of(paragraph)
+              .getOffsetToReveal(paragraph, 0.45, rect: boxes.first.toRect())
+              .offset;
+          await _scroll.animateTo(
+            offset.clamp(
+              _scroll.position.minScrollExtent,
+              _scroll.position.maxScrollExtent,
+            ),
+            duration: duration == Duration.zero
+                ? const Duration(milliseconds: 1)
+                : duration,
+            curve: Curves.easeInOutCubic,
+          );
+        } else {
+          await Scrollable.ensureVisible(
+            target,
+            alignment: 0.45,
+            duration: duration,
+          );
+        }
+      } else {
+        await Scrollable.ensureVisible(
+          target,
+          alignment: 0.45,
+          duration: duration,
+        );
+      }
+      if (!mounted || request != _anchorRequest) return;
+      if (!MediaQuery.disableAnimationsOf(context) && widget.animate) {
+        _focusPulse.forward(from: 0);
+      }
+      widget.onAnchorVisible?.call();
+      _highlightTimer?.cancel();
+      _highlightTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted) setState(() => _highlightedTurn = null);
+      });
+    });
+  }
+
+  String? _anchorTitle(ChatMessage message) {
+    final card = message.cards
+        .where((c) => c['materialId'] == widget.anchorMaterialId)
+        .firstOrNull;
+    final title = card?['title'];
+    return title is String && title.isNotEmpty ? title : null;
+  }
+
+  Widget _messageBubble(ChatMessage message) {
+    final highlighted =
+        message.turnId != null && message.turnId == _highlightedTurn;
+    final textKey = message.turnId == null
+        ? null
+        : _textKeys.putIfAbsent(message.turnId!, GlobalKey.new);
+    final bubble = message.hasStructuredDiscoveries
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (index, card) in message.cards.indexed) ...[
+                if (index > 0) const SizedBox(height: 12),
+                KeyedSubtree(
+                  key: _materialKeys.putIfAbsent(
+                    _materialKey(message.turnId, card['materialId'] ?? index),
+                    GlobalKey.new,
+                  ),
+                  child: ChatBubble(
+                    isUser: false,
+                    text: [
+                      if ((card['title'] as String? ?? '').trim().isNotEmpty)
+                        card['title'] as String,
+                      if ((card['content'] as String? ?? '').trim().isNotEmpty)
+                        card['content'] as String
+                      else if ((card['summary'] as String? ?? '')
+                          .trim()
+                          .isNotEmpty)
+                        card['summary'] as String,
+                    ].join('\n\n'),
+                    highlightText:
+                        highlighted &&
+                            card['materialId'] == widget.anchorMaterialId
+                        ? card['title'] as String?
+                        : null,
+                  ),
+                ),
+              ],
+            ],
+          )
+        : message.isUser
+        ? ChatBubble(text: message.text, isUser: true)
+        : ChatTypewriter(
+            text: message.text,
+            animate:
+                widget.animate &&
+                !highlighted &&
+                _typingTurns.contains(message.turnId),
+            textKey: textKey,
+            highlightText: highlighted ? _anchorTitle(message) : null,
+          );
+    return KeyedSubtree(
+      key: message.turnId == null
+          ? null
+          : _turnKeys.putIfAbsent(message.turnId!, GlobalKey.new),
+      child: bubble,
+    );
   }
 
   Widget _voiceBubble(VoiceClip clip) => Align(
@@ -553,6 +919,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             height: 49,
             child: IconButton(
               tooltip: '开始录音',
+              padding: EdgeInsets.zero,
+              alignment: Alignment.center,
+              iconSize: 28,
               onPressed: _busy ? null : _startRecording,
               icon: chatSvg('mic', width: 28, height: 28),
             ),
@@ -578,7 +947,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               child: IconButton(
                 tooltip: '取消录音',
                 padding: EdgeInsets.zero,
-                onPressed: _busy ? null : _cancelRecording,
+                onPressed: _busy
+                    ? null
+                    : (_dictating ? _cancelDictation : _cancelRecording),
                 icon: chatSvg('record_cancel', width: 36, height: 36),
               ),
             ),
@@ -595,7 +966,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             !widget.animate ||
                             MediaQuery.disableAnimationsOf(context)
                         ? 1
-                        : 0.25 + _voice.level * 0.75,
+                        : 0.25 +
+                              (_dictating ? _dictation.level : _voice.level) *
+                                  0.75,
                     child: chatSvg('waveform', width: 41.56, height: 23),
                   ),
                 ),
@@ -625,10 +998,21 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             width: 50,
             height: 50,
             child: IconButton(
-              tooltip: '完成录音',
+              tooltip: _dictating || _dictationSendPending ? '发送' : '完成录音',
               padding: EdgeInsets.zero,
-              onPressed: _busy ? null : _saveRecording,
-              icon: const ChatSendIcon(),
+              onPressed: _busy
+                  ? null
+                  : (_dictating ? _finishDictation : _saveRecording),
+              icon: _sending || _dictationSendPending
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const ChatSendIcon(),
             ),
           ),
         ],
@@ -685,7 +1069,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           messageBottom - (bannerTop + 4 - welcomeGap),
                         )
                       : 0.0;
-                  final error = _error ?? _voice.error ?? widget.error;
+                  final error = widget.error ?? _error ?? _voice.error;
                   return Stack(
                     children: [
                       Positioned(
@@ -702,11 +1086,44 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         height: math.max(1, messageBottom - messageTop),
                         child: _transcript(bottomPadding: welcomePadding),
                       ),
+                      Positioned(
+                        top: messageTop + 4,
+                        left: 24,
+                        right: 24,
+                        child: IgnorePointer(child: _locationNotice()),
+                      ),
                       if (showBanner)
                         Positioned(
-                          left: 0,
-                          top: bannerTop,
+                          left: _exploreBannerOffset.dx.clamp(
+                            0.0,
+                            math.max(
+                              0.0,
+                              constraints.maxWidth -
+                                  (_exploreBannerCollapsed ? 68 : 188),
+                            ),
+                          ),
+                          top: (bannerTop + _exploreBannerOffset.dy).clamp(
+                            headerTop + 52,
+                            math.max(headerTop + 52, footerTop - 49),
+                          ),
                           child: ChatExploreBanner(
+                            initiallyCollapsed: _exploreBannerCollapsed,
+                            onCollapsedChanged: (value) =>
+                                setState(() => _exploreBannerCollapsed = value),
+                            onDragUpdate: (delta) => setState(() {
+                              final next = _exploreBannerOffset + delta;
+                              _exploreBannerOffset = Offset(
+                                next.dx.clamp(
+                                  0.0,
+                                  math.max(0.0, constraints.maxWidth - 68),
+                                ),
+                                next.dy.clamp(
+                                  headerTop + 52 - bannerTop,
+                                  math.max(headerTop + 52, footerTop - 49) -
+                                      bannerTop,
+                                ),
+                              );
+                            }),
                             onPressed: _busy ? null : widget.onExplore,
                           ),
                         ),
@@ -730,7 +1147,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         right: 16,
                         bottom: footerBottom,
                         height: 50,
-                        child: _recording ? _recordingBar() : _composer(),
+                        child: _dictating || _dictationSendPending || _recording
+                            ? _recordingBar()
+                            : _composer(),
                       ),
                     ],
                   );

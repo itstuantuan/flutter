@@ -31,6 +31,26 @@ class FakePlayback implements VoicePlayback {
 }
 
 void main() {
+  testWidgets(
+    'default chat header uses companion name instead of design sample',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatPage(
+            onExit: () {},
+            onExplore: () {},
+            returningUser: true,
+            showWelcome: false,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Pal'), findsOneWidget);
+      expect(find.text('Tony'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('keyboard stays after send and dismisses on outside tap', (
     tester,
   ) async {

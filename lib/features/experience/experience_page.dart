@@ -6,11 +6,22 @@ import 'package:flutter/services.dart';
 import '../notifications/push_service.dart';
 import '../notifications/notification_prompt.dart';
 import '../home/home_page.dart';
+import '../home/home_sidebar.dart';
+import '../settings/settings_store.dart';
+import '../settings/profile_page.dart';
+import '../settings/feedback_page.dart';
+import '../settings/notification_pages.dart';
 import '../plaza/plaza_page.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../onboarding/interests_page.dart';
 import '../auth/startup_profile_store.dart';
 import '../chat/chat_page.dart';
+import '../chat/live_chat_page.dart';
+import '../chat/chat_service.dart';
+import '../exploration/exploration_controller.dart';
+import '../exploration/exploration_store.dart';
+import '../exploration/live_plaza_page.dart';
+import '../exploration/plaza_entry_page.dart';
 
 import 'package:flutter/material.dart';
 
@@ -25,6 +36,8 @@ class ExperiencePage extends StatefulWidget {
   const ExperiencePage({
     super.key,
     this.controller,
+    this.accountService,
+    this.chatService,
     this.previewWelcomeOnStart = false,
     this.registrationCompleted = false,
     this.returningUser = true,
@@ -39,6 +52,8 @@ class ExperiencePage extends StatefulWidget {
   final StartupProfileStore profileStore;
   final Future<void> Function()? onRegistrationChatComplete;
   final ExperienceController? controller;
+  final AccountService? accountService;
+  final ChatService? chatService;
   @override
   State<ExperiencePage> createState() => _ExperiencePageState();
 }
@@ -49,9 +64,62 @@ class _ExperiencePageState extends State<ExperiencePage>
   final input = TextEditingController();
   Timer? timer;
   final push = PushService();
+  ExplorationController? _bots;
+  Future<void>? _botInitialization;
+  bool _foreground = true;
+  AccountService get _account => widget.accountService ?? account;
+  bool get _real => widget.registrationCompleted;
+
+  Future<void> _initializeBots() async {
+    try {
+      final profile = await widget.profileStore.read();
+      if (!mounted) return;
+      final bots = ExplorationController(
+        service: widget.chatService ?? ChatService.authenticated(_account),
+        store: SecureExplorationStore(
+          namespace: '${AppEnv.apiBaseUrl}.${widget.userId}',
+        ),
+        displayName: profile['name'] as String? ?? _account.session?.nick ?? '',
+        onUnauthorized: () async {
+          await _account.logout();
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute<void>(
+              builder: (_) => AuthGate(service: _account),
+            ),
+            (_) => false,
+          );
+        },
+      );
+      _bots = bots;
+      bots.addListener(refresh);
+      if (!_foreground) bots.pause();
+      await bots.initialize();
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) _notice('无法初始化探索，请退出后重试');
+    }
+  }
+
+  Future<ExplorationController> _readyBots() async {
+    await _botInitialization;
+    final bots = _bots;
+    if (bots == null || !bots.ready) throw const ChatException('探索尚未就绪，请稍后重试');
+    return bots;
+  }
+
+  Future<void> _discoveryVisible(String taskId) async {
+    try {
+      await _bots?.acknowledgeTask(taskId);
+    } catch (e) {
+      await _bots?.reportError(e);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    unawaited(_loadLocalProfile());
     flow = widget.controller ?? ExperienceController(LocalExperienceStore());
     WidgetsBinding.instance.addObserver(this);
     flow.addListener(refresh);
@@ -59,6 +127,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     push.addListener(refresh);
     push.initialize();
     timer = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
+    if (_real) _botInitialization = _initializeBots();
   }
 
   bool demoOpening = false;
@@ -74,8 +143,46 @@ class _ExperiencePageState extends State<ExperiencePage>
       _registrationError = null;
     });
     try {
-      await widget.onRegistrationChatComplete?.call();
-      if (mounted && explore) await _explore();
+      final bots = await _readyBots();
+      final selection = await bots.interests();
+      if (!mounted) return;
+      final ids = List<String>.from(selection['selected'] as List? ?? []);
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (routeContext) => InterestsPage(
+            initialSelection: interestIds.entries
+                .where((entry) => ids.contains(entry.value))
+                .map((entry) => entry.key)
+                .toList(),
+            onStart: (labels) async {
+              try {
+                await bots.saveInterests(labels);
+                await widget.onRegistrationChatComplete?.call();
+                final task = await bots.startExploration();
+                if (task == null || !routeContext.mounted) return false;
+                // Keep interests covering home until the exploration route
+                // replaces it. There is no pop-to-home between these screens.
+                unawaited(
+                  Navigator.of(routeContext).pushReplacement<void, void>(
+                    MaterialPageRoute(
+                      builder: (_) => LivePlazaPage(
+                        controller: bots,
+                        taskId: task,
+                        onChat: (voice) => _homeChat(record: voice),
+                        onOpenDiscovery: _openDiscoveryChat,
+                      ),
+                    ),
+                  ),
+                );
+                return true;
+              } catch (e) {
+                await bots.reportError(e);
+                return false;
+              }
+            },
+          ),
+        ),
+      );
     } catch (_) {
       if (mounted) setState(() => _registrationError = '保存失败，请重试');
     } finally {
@@ -126,11 +233,22 @@ class _ExperiencePageState extends State<ExperiencePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     refresh();
-    if (state == AppLifecycleState.resumed) push.refresh();
+    if (state == AppLifecycleState.resumed) {
+      _foreground = true;
+      push.refresh();
+      _bots?.resume();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _foreground = false;
+      _bots?.pause();
+    }
   }
 
   @override
   void dispose() {
+    _bots?.removeListener(refresh);
+    _bots?.dispose();
     timer?.cancel();
     push.removeListener(refresh);
     push.dispose();
@@ -400,7 +518,154 @@ class _ExperiencePageState extends State<ExperiencePage>
     }
   }
 
+  final _settingsStore = const SettingsStore();
+  LocalUserProfile _localProfile = const LocalUserProfile();
+  Future<void> _loadLocalProfile() async {
+    try {
+      final profile = await _settingsStore.profile(widget.userId);
+      if (mounted) setState(() => _localProfile = profile);
+    } catch (_) {}
+  }
+
   Future<void> _homeMenu() async {
+    final selection = await showGeneralDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '关闭侧栏',
+      barrierColor: Colors.black.withValues(alpha: .3),
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (drawerContext, animation, secondaryAnimation) =>
+          HomeSidebar(
+            name: _localProfile.name ?? _account.session?.nick ?? flow.name,
+            avatar: _localProfile.avatar,
+            avatarUrl: _account.session?.avatar,
+            onSelect: (value) => Navigator.pop(drawerContext, value),
+          ),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          SlideTransition(
+            position:
+                Tween<Offset>(
+                  begin: const Offset(-1, 0),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
+            child: child,
+          ),
+    );
+    if (!mounted || selection == null) return;
+    switch (selection) {
+      case 'debug':
+        await _debugMenu();
+      case 'interests':
+        await _sidebarInterests();
+      case 'profile':
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => ProfilePage(
+              name: _localProfile.name ?? _account.session?.nick ?? flow.name,
+              uid: _account.session?.uid ?? widget.userId,
+              avatar: _localProfile.avatar,
+              avatarUrl: _account.session?.avatar,
+              onSave: (profile) async {
+                await _settingsStore.saveProfile(widget.userId, profile);
+                if (mounted) setState(() => _localProfile = profile);
+              },
+              onLogout: () async {
+                await _account.logout();
+                if (!mounted) return;
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute<void>(
+                    builder: (_) => AuthGate(service: _account),
+                  ),
+                  (_) => false,
+                );
+              },
+            ),
+          ),
+        );
+      case 'notifications':
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => const NotificationsPage()),
+        );
+      case 'feedback':
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) =>
+                FeedbackPage(uid: widget.userId, store: _settingsStore),
+          ),
+        );
+      case 'about':
+        await _sidebarInfo('关于我们', 'Pals\n让陪伴与灵感融入每一天。\n\n版本 0.1.0');
+    }
+  }
+
+  Future<void> _sidebarInterests() async {
+    try {
+      final bots = _real ? await _readyBots() : null;
+      final selection = await bots?.interests();
+      final ids = List<String>.from(selection?['selected'] as List? ?? []);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (routeContext) => InterestsPage(
+            initialSelection: bots == null
+                ? flow.interests
+                : interestIds.entries
+                      .where((entry) => ids.contains(entry.value))
+                      .map((entry) => entry.key)
+                      .toList(),
+            onStart: (labels) async {
+              try {
+                if (bots != null) {
+                  await bots.saveInterests(labels);
+                } else {
+                  await flow.saveInterests(labels);
+                }
+                if (routeContext.mounted) Navigator.pop(routeContext);
+                return true;
+              } catch (_) {
+                if (mounted) _notice('兴趣保存失败，请重试');
+                return false;
+              }
+            },
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) _notice('无法加载兴趣，请稍后重试');
+    }
+  }
+
+  Future<void> _sidebarInfo(String title, String message) =>
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            backgroundColor: const Color(0xFF33303B),
+            appBar: AppBar(
+              title: Text(title),
+              backgroundColor: const Color(0xFF33303B),
+              foregroundColor: Colors.white,
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+  Future<void> _debugMenu() async {
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
@@ -408,6 +673,19 @@ class _ExperiencePageState extends State<ExperiencePage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: const Text('消息详情预览'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MessageDetailPage(message: designSystemMessage),
+                  ),
+                );
+              },
+            ),
             if (AppEnv.enableTestTools)
               ListTile(
                 leading: const Icon(Icons.restart_alt),
@@ -422,9 +700,14 @@ class _ExperiencePageState extends State<ExperiencePage>
               title: const Text('创作广场'),
               onTap: () {
                 Navigator.pop(sheetContext);
+                if (_real) {
+                  _openCurrentPlaza();
+                  return;
+                }
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => PlazaPage(
+                      displayName: flow.name,
                       onChat: _homeChat,
                       onVoice: () => _homeChat(record: true),
                     ),
@@ -458,29 +741,54 @@ class _ExperiencePageState extends State<ExperiencePage>
     );
   }
 
-  Future<void> _homeChat({bool record = false}) async {
+  Future<void> _homeChat({
+    bool record = false,
+    String? taskId,
+    String? materialId,
+  }) async {
+    if (_real) {
+      try {
+        await _readyBots();
+      } catch (_) {
+        if (mounted) _notice('聊天尚未就绪，请稍后重试');
+        return;
+      }
+      if (!mounted) return;
+    }
     final explore = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
-        builder: (chatContext) => ListenableBuilder(
-          listenable: flow,
-          builder: (_, _) => ChatPage(
-            name: flow.character.name,
-            returningUser: true,
-            messages: flow.chatMessages,
-            busy: flow.busy,
-            error: flow.error,
-            initialDraft: input.text,
-            startRecordingOnOpen: record,
-            onSend: (text) async {
-              await flow.send(text);
-              if (flow.error == null) input.clear();
-              return flow.error == null;
-            },
-            onVoiceRecorded: flow.saveVoice,
-            onExit: () => Navigator.pop(chatContext, false),
-            onExplore: () => Navigator.pop(chatContext, true),
-          ),
-        ),
+        builder: (chatContext) => widget.registrationCompleted
+            ? LiveChatPage(
+                accountService: _account,
+                controller: _bots?.chat,
+                taskId: taskId,
+                materialId: materialId,
+                onDiscoveryVisible: _discoveryVisible,
+                initialDraft: input.text,
+                startRecordingOnOpen: record,
+                onExit: () => Navigator.pop(chatContext, false),
+                onExplore: () => Navigator.pop(chatContext, true),
+              )
+            : ListenableBuilder(
+                listenable: flow,
+                builder: (_, _) => ChatPage(
+                  name: flow.character.name,
+                  returningUser: true,
+                  messages: flow.chatMessages,
+                  busy: flow.busy,
+                  error: flow.error,
+                  initialDraft: input.text,
+                  startRecordingOnOpen: record,
+                  onSend: (text) async {
+                    await flow.send(text);
+                    if (flow.error == null) input.clear();
+                    return flow.error == null;
+                  },
+                  onVoiceRecorded: flow.saveVoice,
+                  onExit: () => Navigator.pop(chatContext, false),
+                  onExplore: () => Navigator.pop(chatContext, true),
+                ),
+              ),
       ),
     );
     if (explore == true && mounted) await _explore();
@@ -491,40 +799,51 @@ class _ExperiencePageState extends State<ExperiencePage>
     if (_exploreOpening) return;
     _exploreOpening = true;
     try {
-      var selected = await widget.profileStore.hasSelectedInterests(
-        widget.userId,
-      );
-      if (!mounted) return;
-      if (!selected) {
-        selected =
-            await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (routeContext) => InterestsPage(
-                  onStart: (values) async {
-                    await flow.saveInterests(values);
-                    if (flow.error != null) return false;
-                    await widget.profileStore.saveSelectedInterests(
-                      widget.userId,
-                      values,
-                    );
-                    if (routeContext.mounted) Navigator.pop(routeContext, true);
-                    return true;
-                  },
-                ),
-              ),
-            ) ==
-            true;
+      if (_real) {
+        await _exploreLive();
+        return;
       }
-      if (selected && mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PlazaPage(
-              onChat: _homeChat,
-              onVoice: () => _homeChat(record: true),
-            ),
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => PlazaEntryPage(
+            displayName: flow.name,
+            prepare: (entryContext) async {
+              var selected = await widget.profileStore.hasSelectedInterests(
+                widget.userId,
+              );
+              if (!entryContext.mounted) return null;
+              if (!selected) {
+                selected =
+                    await Navigator.of(entryContext).push<bool>(
+                      MaterialPageRoute(
+                        builder: (routeContext) => InterestsPage(
+                          onStart: (values) async {
+                            await flow.saveInterests(values);
+                            if (flow.error != null) return false;
+                            await widget.profileStore.saveSelectedInterests(
+                              widget.userId,
+                              values,
+                            );
+                            if (routeContext.mounted) {
+                              Navigator.pop(routeContext, true);
+                            }
+                            return true;
+                          },
+                        ),
+                      ),
+                    ) ==
+                    true;
+              }
+              if (!selected || !entryContext.mounted) return null;
+              return PlazaPage(
+                displayName: flow.name,
+                onChat: _homeChat,
+                onVoice: () => _homeChat(record: true),
+              );
+            },
           ),
-        );
-      }
+        ),
+      );
     } catch (_) {
       if (mounted) _notice('无法读取兴趣选择，请重试');
     } finally {
@@ -532,7 +851,109 @@ class _ExperiencePageState extends State<ExperiencePage>
     }
   }
 
+  Future<void> _openCurrentPlaza() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => PlazaEntryPage(
+        displayName: flow.name,
+        prepare: (entryContext) async {
+          final bots = await _readyBots();
+          if (!entryContext.mounted) return null;
+          await bots.refreshHome();
+          if (!entryContext.mounted) return null;
+          return LivePlazaPage(
+            controller: bots,
+            taskId: bots.activeTaskId,
+            onChat: (voice) => _homeChat(record: voice),
+            onOpenDiscovery: _openDiscoveryChat,
+          );
+        },
+      ),
+    ),
+  );
+
+  Future<void> _exploreLive() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PlazaEntryPage(
+          displayName:
+              _localProfile.name ?? _account.session?.nick ?? flow.name,
+          prepare: (entryContext) async {
+            final bots = await _readyBots();
+            if (!entryContext.mounted) return null;
+            final task = await bots.startExploration(
+              isCurrent: () => entryContext.mounted,
+              confirmInterests: (selection) async {
+                if (!entryContext.mounted) return null;
+                final ids = List<String>.from(
+                  selection['selected'] as List? ?? [],
+                );
+                return Navigator.of(entryContext).push<List<String>>(
+                  MaterialPageRoute(
+                    builder: (routeContext) => InterestsPage(
+                      initialSelection: interestIds.entries
+                          .where((entry) => ids.contains(entry.value))
+                          .map((entry) => entry.key)
+                          .toList(),
+                      onStart: (labels) async {
+                        try {
+                          await bots.saveInterests(labels);
+                          if (routeContext.mounted) {
+                            Navigator.pop(
+                              routeContext,
+                              labels
+                                  .map((label) => interestIds[label]!)
+                                  .toList(),
+                            );
+                          }
+                          return true;
+                        } catch (e) {
+                          await bots.reportError(e);
+                          return false;
+                        }
+                      },
+                    ),
+                  ),
+                );
+              },
+            );
+            if (!entryContext.mounted) return null;
+            if (task == null) {
+              if (bots.error != null) throw ChatException(bots.error!);
+              return null;
+            }
+            return LivePlazaPage(
+              controller: bots,
+              taskId: task,
+              onChat: (voice) => _homeChat(record: voice),
+              onOpenDiscovery: _openDiscoveryChat,
+            );
+          },
+        ),
+      ),
+    );
+    if (mounted) {
+      unawaited(
+        _bots?.refreshHome().catchError((Object e) => _bots?.reportError(e)),
+      );
+    }
+  }
+
+  Future<void> _openDiscoveryChat(String taskId, String? materialId) =>
+      _homeChat(taskId: taskId, materialId: materialId);
+
   Future<void> _homeDiscovery(int index) async {
+    if (_real) {
+      final cards = _bots?.cards ?? [];
+      if (index < 0 || index >= cards.length) return;
+      final card = cards[index];
+      final task = card['taskId'];
+      if (task is! String || task.isEmpty) {
+        _notice('这条发现缺少定位信息');
+        return;
+      }
+      await _openDiscoveryChat(task, card['materialId'] as String?);
+      return;
+    }
     if (flow.discoveryCount > index) {
       await detail(index);
       if (mounted && input.text.isNotEmpty) await _homeChat();
@@ -541,6 +962,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PlazaPage(
+          displayName: flow.name,
           initialDiscovery: index,
           onChat: _homeChat,
           onVoice: () => _homeChat(record: true),
@@ -552,17 +974,15 @@ class _ExperiencePageState extends State<ExperiencePage>
   @override
   Widget build(BuildContext context) =>
       widget.registrationCompleted && !widget.returningUser
-      ? !flow.ready
+      ? !flow.ready || (_real && _bots == null)
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-            : ChatPage(
-                messages: flow.chatMessages,
-                busy: flow.busy || _finishingRegistration,
-                error: _registrationError ?? flow.error,
-                onSend: (text) async {
-                  await flow.send(text);
-                  return flow.error == null;
-                },
-                onVoiceRecorded: flow.saveVoice,
+            : LiveChatPage(
+                accountService: _account,
+                controller: _bots?.chat,
+                onDiscoveryVisible: _discoveryVisible,
+                returningUser: false,
+                error: _registrationError,
+                busy: _finishingRegistration,
                 onExit: _finishRegistrationChat,
                 onExplore: () => _finishRegistrationChat(explore: true),
               )
@@ -580,13 +1000,26 @@ class _ExperiencePageState extends State<ExperiencePage>
       ? HomeNotificationPrompt(
           push: push,
           child: HomePage(
+            hintUserId: widget.userId,
             onMenu: _homeMenu,
             onFriends: () => _notice('好友功能尚未开放'),
             onExplore: _explore,
             onChat: _homeChat,
             onVoice: () => _homeChat(record: true),
             onDiscovery: _homeDiscovery,
-            discoveries: flow.discoveryCount == 0
+            loadingDiscoveries: _real && (_bots?.loadingCards ?? true),
+            discoveries: _real
+                ? [
+                    for (final (i, card)
+                        in (_bots?.cards ?? <Map<String, dynamic>>[]).indexed)
+                      HomeDiscovery(
+                        title: card['title'] as String? ?? '',
+                        description: card['text'] as String? ?? '',
+                        style: DiscoveryStyle
+                            .values[i % DiscoveryStyle.values.length],
+                      ),
+                  ]
+                : flow.discoveryCount == 0
                 ? HomePage.designDiscoveries
                 : [
                     for (var i = 0; i < flow.discoveryCount; i++)

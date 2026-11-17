@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../shared/design_scene.dart';
 import 'home_chat_hint.dart';
+import 'home_interactions.dart';
 
 enum DiscoveryStyle { blue, purple, glass }
 
@@ -30,14 +31,18 @@ class HomePage extends StatefulWidget {
     required this.onVoice,
     required this.onDiscovery,
     this.onFriends,
+    this.hintUserId,
     this.discoveries = designDiscoveries,
     this.initialPage = 0,
+    this.loadingDiscoveries = false,
   });
   final VoidCallback onMenu, onExplore, onChat, onVoice;
   final VoidCallback? onFriends;
   final ValueChanged<int> onDiscovery;
   final List<HomeDiscovery> discoveries;
   final int initialPage;
+  final String? hintUserId;
+  final bool loadingDiscoveries;
   static const designDiscoveries = [
     HomeDiscovery(description: '广场上出现了新的创作挑战:', title: '“用AI创作一段属于秋天的故”'),
     HomeDiscovery(
@@ -56,6 +61,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool _hintDismissed = false;
+  void _act(VoidCallback action) {
+    setState(() => _hintDismissed = true);
+    action();
+  }
+
   late final PageController _pages = PageController(
     initialPage: widget.initialPage,
     viewportFraction: 327 / 375,
@@ -184,49 +195,56 @@ class _HomePageState extends State<HomePage> {
                               right: 0,
                               top: cardTop,
                               height: cardHeight,
-                              child: PageView.builder(
-                                key: const ValueKey('home-discoveries'),
-                                controller: _pages,
-                                itemCount: widget.discoveries.length,
-                                onPageChanged: (value) =>
-                                    setState(() => _selected = value),
-                                itemBuilder: (context, index) => Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 5,
-                                    right: 7,
-                                  ),
-                                  child: AnimatedBuilder(
-                                    animation: _pages,
-                                    builder: (context, child) {
-                                      final page =
-                                          _pages.hasClients &&
-                                              _pages
-                                                  .position
-                                                  .hasContentDimensions
-                                          ? (_pages.page ??
-                                                _selected.toDouble())
-                                          : _selected.toDouble();
-                                      final distance = (page - index)
-                                          .abs()
-                                          .clamp(0.0, 1.0);
-                                      return Transform.translate(
-                                        offset: Offset(0, 18 * distance),
-                                        child: Transform.scale(
-                                          scale: 1 - 0.152 * distance,
-                                          alignment: Alignment.topLeft,
-                                          child: _DiscoveryCard(
-                                            discovery:
-                                                widget.discoveries[index],
-                                            outlined: distance > 0.5,
-                                            onPressed: () =>
-                                                widget.onDiscovery(index),
-                                          ),
+                              child:
+                                  widget.loadingDiscoveries &&
+                                      widget.discoveries.isEmpty
+                                  ? const _DiscoveryPlaceholder()
+                                  : PageView.builder(
+                                      key: const ValueKey('home-discoveries'),
+                                      controller: _pages,
+                                      itemCount: widget.discoveries.length,
+                                      onPageChanged: (value) =>
+                                          setState(() => _selected = value),
+                                      itemBuilder: (context, index) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 5,
+                                          right: 7,
                                         ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
+                                        child: AnimatedBuilder(
+                                          animation: _pages,
+                                          builder: (context, child) {
+                                            final page =
+                                                _pages.hasClients &&
+                                                    _pages
+                                                        .position
+                                                        .hasContentDimensions
+                                                ? (_pages.page ??
+                                                      _selected.toDouble())
+                                                : _selected.toDouble();
+                                            final distance = (page - index)
+                                                .abs()
+                                                .clamp(0.0, 1.0);
+                                            return Transform.translate(
+                                              offset: Offset(0, 18 * distance),
+                                              child: Transform.scale(
+                                                scale: 1 - 0.152 * distance,
+                                                alignment: Alignment.topLeft,
+                                                child: _DiscoveryCard(
+                                                  discovery:
+                                                      widget.discoveries[index],
+                                                  outlined: distance > 0.5,
+                                                  onPressed: () => _act(
+                                                    () => widget.onDiscovery(
+                                                      index,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
                             ),
                             Positioned(
                               left: 0,
@@ -245,40 +263,42 @@ class _HomePageState extends State<HomePage> {
                                       label: '发现第 ${i + 1} 页',
                                       selected: i == _selected,
                                       button: true,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: () => _pages.animateToPage(
-                                          i,
-                                          duration:
-                                              MediaQuery.disableAnimationsOf(
-                                                context,
-                                              )
-                                              ? Duration.zero
-                                              : const Duration(
-                                                  milliseconds: 250,
-                                                ),
-                                          curve: Curves.easeOut,
-                                        ),
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 42,
-                                          child: Center(
-                                            child: Container(
-                                              width: 10,
-                                              height: 10,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: i == _selected
-                                                    ? const Color(0xFFE5DFFF)
-                                                    : null,
-                                                border: i == _selected
-                                                    ? null
-                                                    : Border.all(
-                                                        color: const Color(
-                                                          0xFF9990C3,
+                                      child: HomePressFeedback(
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => _pages.animateToPage(
+                                            i,
+                                            duration:
+                                                MediaQuery.disableAnimationsOf(
+                                                  context,
+                                                )
+                                                ? Duration.zero
+                                                : const Duration(
+                                                    milliseconds: 250,
+                                                  ),
+                                            curve: Curves.easeOut,
+                                          ),
+                                          child: SizedBox(
+                                            width: 20,
+                                            height: 42,
+                                            child: Center(
+                                              child: Container(
+                                                width: 10,
+                                                height: 10,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: i == _selected
+                                                      ? const Color(0xFFE5DFFF)
+                                                      : null,
+                                                  border: i == _selected
+                                                      ? null
+                                                      : Border.all(
+                                                          color: const Color(
+                                                            0xFF9990C3,
+                                                          ),
+                                                          width: 0.7,
                                                         ),
-                                                        width: 0.7,
-                                                      ),
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -301,11 +321,13 @@ class _HomePageState extends State<HomePage> {
                 child: SizedBox(
                   width: 48,
                   height: 48,
-                  child: IconButton(
-                    tooltip: '菜单',
-                    onPressed: widget.onMenu,
-                    padding: EdgeInsets.zero,
-                    icon: _svg('menu', 22.9583, 20.5417),
+                  child: HomePressFeedback(
+                    child: IconButton(
+                      tooltip: '菜单',
+                      onPressed: () => _act(widget.onMenu),
+                      padding: EdgeInsets.zero,
+                      icon: _svg('menu', 22.9583, 20.5417),
+                    ),
                   ),
                 ),
               ),
@@ -323,30 +345,32 @@ class _HomePageState extends State<HomePage> {
                         child: Semantics(
                           button: true,
                           label: '逛一逛',
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: widget.onExplore,
-                            child: SizedBox(
-                              width: 130,
-                              height: 45,
-                              child: Center(
-                                child: ClipRect(
-                                  child: SizedBox(
-                                    width: 130,
-                                    height: 40,
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          left: -107,
-                                          top: 0,
-                                          child: SvgPicture.asset(
-                                            'assets/home/explore.svg',
-                                            width: 237,
-                                            height: 40,
-                                            excludeFromSemantics: true,
+                          child: HomePressFeedback(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _act(widget.onExplore),
+                              child: SizedBox(
+                                width: 130,
+                                height: 45,
+                                child: Center(
+                                  child: ClipRect(
+                                    child: SizedBox(
+                                      width: 130,
+                                      height: 40,
+                                      child: Stack(
+                                        children: [
+                                          Positioned(
+                                            left: -107,
+                                            top: 0,
+                                            child: SvgPicture.asset(
+                                              'assets/home/explore.svg',
+                                              width: 237,
+                                              height: 40,
+                                              excludeFromSemantics: true,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -366,12 +390,12 @@ class _HomePageState extends State<HomePage> {
                           _ToolbarAction(
                             label: '聊天',
                             asset: 'chat',
-                            onPressed: widget.onChat,
+                            onPressed: () => _act(widget.onChat),
                           ),
                           _ToolbarAction(
                             label: '语音',
                             asset: 'microphone',
-                            onPressed: widget.onVoice,
+                            onPressed: () => _act(widget.onVoice),
                           ),
                         ],
                       ),
@@ -384,7 +408,14 @@ class _HomePageState extends State<HomePage> {
                 bottom: footerBottom - 39,
                 width: 183,
                 height: 180,
-                child: const HomeChatHint(),
+                child: _hintDismissed
+                    ? const SizedBox.shrink()
+                    : widget.hintUserId == null
+                    ? const HomeChatHint()
+                    : FirstHomeChatHint(
+                        key: ValueKey(widget.hintUserId),
+                        userId: widget.hintUserId!,
+                      ),
               ),
             ],
           );
@@ -569,21 +600,23 @@ class _DiscoveryCard extends StatelessWidget {
                   42,
                   MediaQuery.textScalerOf(context).scale(14) * 1.25 + 16,
                 ),
-                child: TextButton(
-                  onPressed: onPressed,
-                  style: TextButton.styleFrom(
-                    overlayColor: Colors.transparent,
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF111111),
-                    shape: const StadiumBorder(),
-                    padding: EdgeInsets.zero,
-                  ),
-                  child: const Text(
-                    '去看看',
-                    style: TextStyle(
-                      fontFamily: 'PingFang SC',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                child: HomePressFeedback(
+                  child: TextButton(
+                    onPressed: onPressed,
+                    style: TextButton.styleFrom(
+                      overlayColor: Colors.transparent,
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF111111),
+                      shape: const StadiumBorder(),
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: const Text(
+                      '去看看',
+                      style: TextStyle(
+                        fontFamily: 'PingFang SC',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -756,12 +789,50 @@ class _ToolbarAction extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: 45,
     height: 45,
-    child: IconButton(
-      tooltip: label,
-      onPressed: onPressed,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 45, minHeight: 45),
-      icon: _svg(asset, 24, 24),
+    child: HomePressFeedback(
+      child: IconButton(
+        tooltip: label,
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 45, minHeight: 45),
+        icon: _svg(asset, 24, 24),
+      ),
+    ),
+  );
+}
+
+class _DiscoveryPlaceholder extends StatelessWidget {
+  const _DiscoveryPlaceholder();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '正在加载今日发现',
+    child: Container(
+      key: const ValueKey('home-discoveries-loading'),
+      margin: const EdgeInsets.symmetric(horizontal: 30),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF272B40),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0x38FFFFFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final width in [110.0, 220.0, 170.0])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Container(
+                width: width,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: const Color(0x26FFFFFF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+        ],
+      ),
     ),
   );
 }

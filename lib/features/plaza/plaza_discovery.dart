@@ -9,34 +9,19 @@ class PlazaDiscovery {
     required this.body,
     required this.category,
     this.image = 'assets/design/discovery_illustration.png',
+    this.coverUrl,
+    this.materialId,
   });
 
   final String title, body, category, image;
-
-  // Local preview content, until exploration results are supplied by the API.
-  static const samples = [
-    PlazaDiscovery(
-      title: '听说唱，你更在意押韵还是表达？',
-      body: '从格莱美说唱类奖项页面寻找作品，比较不同的节奏与叙事。哪句表达让你记住一首歌？不用会唱，也能聊聊自己的感受。',
-      category: '游戏·烹饪经营',
-    ),
-    PlazaDiscovery(
-      title: '猫咪到底在想些什么？',
-      body: '从耳朵、尾巴和叫声，观察猫咪表达情绪的小细节。你家的猫咪有哪些让你好奇的习惯？一起分享那些可爱的瞬间。',
-      category: '宠物·猫咪',
-    ),
-    PlazaDiscovery(
-      title: '用 AI 创作一段属于秋天的故事',
-      body: '从一片落叶、一杯热饮或一场偶遇开始，写下故事的第一句。让想象继续生长，看看我们能一起创造怎样的秋天。',
-      category: '创作·故事',
-    ),
-  ];
+  final String? coverUrl, materialId;
 }
 
 Future<PlazaDiscovery?> showPlazaDiscoveries(
   BuildContext context, {
-  List<PlazaDiscovery> discoveries = PlazaDiscovery.samples,
+  required List<PlazaDiscovery> discoveries,
   int initialPage = 0,
+  VoidCallback? onPresented,
 }) {
   assert(discoveries.isNotEmpty);
   return showDialog<PlazaDiscovery>(
@@ -46,6 +31,7 @@ Future<PlazaDiscovery?> showPlazaDiscoveries(
     builder: (_) => PlazaDiscoveryDialog(
       discoveries: discoveries,
       initialPage: initialPage,
+      onPresented: onPresented,
     ),
   );
 }
@@ -56,16 +42,26 @@ class PlazaDiscoveryDialog extends StatefulWidget {
     super.key,
     required this.discoveries,
     this.initialPage = 0,
+    this.onPresented,
   }) : assert(discoveries.length > 0);
 
   final List<PlazaDiscovery> discoveries;
   final int initialPage;
+  final VoidCallback? onPresented;
 
   @override
   State<PlazaDiscoveryDialog> createState() => _PlazaDiscoveryDialogState();
 }
 
 class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onPresented?.call();
+    });
+  }
+
   late int _selected = widget.initialPage.clamp(
     0,
     widget.discoveries.length - 1,
@@ -90,7 +86,7 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
         final textScale = MediaQuery.textScalerOf(context).scale(21) / 21;
         final height = math.min(
           constraints.maxHeight,
-          509.0 + math.max(0, textScale - 1) * 150,
+          (509.0 + math.max(0, textScale - 1) * 150) * width / 375,
         );
         return SizedBox(
           width: width,
@@ -104,10 +100,17 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
                   itemCount: widget.discoveries.length,
                   onPageChanged: (value) => setState(() => _selected = value),
                   itemBuilder: (context, index) => SingleChildScrollView(
-                    child: _DiscoveryCard(
-                      discovery: widget.discoveries[index],
-                      onOpen: () =>
-                          Navigator.pop(context, widget.discoveries[index]),
+                    child: FittedBox(
+                      fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: 375,
+                        child: _DiscoveryCard(
+                          discovery: widget.discoveries[index],
+                          onOpen: () =>
+                              Navigator.pop(context, widget.discoveries[index]),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -232,11 +235,25 @@ class _DiscoveryCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.asset(
-                          discovery.image,
-                          fit: BoxFit.fill,
-                          excludeFromSemantics: true,
-                        ),
+                        if (discovery.coverUrl?.startsWith('https://') == true)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(17),
+                            child: Image.network(
+                              discovery.coverUrl!,
+                              fit: BoxFit.cover,
+                              excludeFromSemantics: true,
+                              errorBuilder: (_, _, _) => Image.asset(
+                                discovery.image,
+                                fit: BoxFit.fill,
+                              ),
+                            ),
+                          )
+                        else
+                          Image.asset(
+                            discovery.image,
+                            fit: BoxFit.fill,
+                            excludeFromSemantics: true,
+                          ),
                         Positioned(
                           left: 0,
                           right: 0,
@@ -266,6 +283,8 @@ class _DiscoveryCard extends StatelessWidget {
                   const SizedBox(height: 2.8),
                   Text(
                     discovery.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontFamily: 'PingFang SC',
                       fontSize: 21,
@@ -308,7 +327,7 @@ class _DiscoveryCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(104),
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF2EA5EF), Color(0xFFA43ADD)],
+                        colors: [Color(0xFF00A5ED), Color(0xFFAB23E7)],
                       ),
                     ),
                     child: TextButton(
@@ -438,6 +457,9 @@ class _CategoryTag extends StatelessWidget {
             child: Center(
               child: Text(
                 label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
                 textScaler: TextScaler.noScaling,
                 style: const TextStyle(
                   fontFamily: 'PingFang SC',

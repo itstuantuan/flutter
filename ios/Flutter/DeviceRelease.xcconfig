@@ -1,0 +1,5 @@
+// Local Release runs use development signing; App Store defaults stay in Runner.
+VIITOR_SIGNING_STYLE = Automatic
+VIITOR_SIGNING_IDENTITY = Apple Development
+VIITOR_SIGNING_PROFILE =
+VIITOR_SIGNING_ENTITLEMENTS = Runner/Runner.entitlements

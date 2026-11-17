@@ -4,6 +4,16 @@
 *.pyc
 *.swp
 .DS_Store
+# Archives and packaged iOS builds
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.tgz
+*.bz2
+*.xz
+*.ipa
 .atom/
 .build/
 .buildlog/

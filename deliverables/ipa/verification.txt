@@ -1,0 +1,25 @@
+Pals Release / Test backend
+File: Pals-test-release-0.1.0+2.ipa
+Version: 0.1.0 (2)
+Bundle ID: com.viitor.bot
+Build mode: Release (AOT)
+Backend: https://bot-test.viitor.live
+Account service: https://account-api.ilivedata.com
+Test tools: disabled
+Distribution: App Store Connect / TestFlight
+Provisioning profile: ViiTor_Bot_AppStore
+Profile expires (UTC): 2027-11-16T01:57:06
+SHA-256: cdc688200dc0ad86758052718a815878a0a1a0b9a1ac06a0220cba4ec85d7e02
+
+Verified:
+- codesign --verify --deep --strict passed on extracted final IPA.
+- AOT binary contains expected test endpoint and configured signing/OAuth values.
+- Unauthenticated chat /me returns HTTP 401.
+- Signed account request with missing login fields returns HTTP 200, parameter-validation error.
+- No SMS sent and no real login performed during the probes.
+
+Not verified: installed-device real-account login/chat end-to-end.
+
+Rebuild:
+python3 scripts/configure_google_sign_in.py --config env/test-release.local.json
+flutter build ipa --release --build-number=2 --dart-define-from-file=env/test-release.local.json --export-options-plist=ios/ExportOptions.plist

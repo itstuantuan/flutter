@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../experience/experience_page.dart';
+import '../chat/chat_service.dart';
 import 'account_service.dart';
 import 'phone_login_page.dart';
 import 'name_page.dart';
@@ -14,9 +15,11 @@ class AuthGate extends StatefulWidget {
     super.key,
     required this.service,
     this.experienceBuilder,
+    this.chatService,
     this.profileStore = const StartupProfileStore(),
   });
   final AccountService service;
+  final ChatService? chatService;
   final StartupProfileStore profileStore;
   final Widget Function(bool newUser)? experienceBuilder;
   @override
@@ -35,9 +38,9 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _authenticatedSession(AccountSession session) async {
     final chats = _registrationChats;
     final pending =
-        widget.service.testNewUser ||
         chats[session.uid] == 'pending' ||
-        (session.isNewUser && chats[session.uid] != 'done');
+        ((widget.service.testNewUser || session.isNewUser) &&
+            chats[session.uid] != 'done');
     if (pending) {
       final value = {
         ..._profile,
@@ -90,14 +93,19 @@ class _AuthGateState extends State<AuthGate> {
       _profile = await widget.profileStore.read();
       if (session == null) {
         _returning = await widget.service.hasCompletedRegistration();
+      } else {
+        // Credentials can survive an interrupted/failed first profile write.
+        // Apply the same new-user decision as a fresh login before routing.
+        await _authenticatedSession(session);
       }
       if (!mounted) return;
-      setState(() {
-        _authenticated = session != null;
-        _uid = session?.uid;
-        _newUser =
-            session != null && _registrationChats[session.uid] == 'pending';
-      });
+      if (session == null) {
+        setState(() {
+          _authenticated = false;
+          _uid = null;
+          _newUser = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _error = '无法读取登录状态，请重试');
     } finally {
@@ -150,6 +158,8 @@ class _AuthGateState extends State<AuthGate> {
     return widget.experienceBuilder?.call(_newUser) ??
         ExperiencePage(
           userId: _uid!,
+          accountService: widget.service,
+          chatService: widget.chatService,
           profileStore: widget.profileStore,
           registrationCompleted: true,
           returningUser: !_newUser,

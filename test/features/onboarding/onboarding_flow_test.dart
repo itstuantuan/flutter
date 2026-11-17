@@ -134,13 +134,14 @@ void main() {
       await tester.tap(find.text('去看看').hitTestable());
       await tester.pumpAndSettle();
       expect(find.byType(PlazaPage), findsOneWidget);
-      expect(find.byType(PlazaDiscoveryDialog), findsOneWidget);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
+      expect(find.byType(PlazaDiscoveryDialog), findsNothing);
+      expect(find.text('当前暂无探索发现'), findsOneWidget);
       await tester.tap(find.byTooltip('返回首页'));
       await tester.pumpAndSettle();
       expect(find.byType(HomePage), findsOneWidget);
       await tester.tap(find.byTooltip('菜单'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('调试工具'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('流程验证'));
       await tester.pumpAndSettle();

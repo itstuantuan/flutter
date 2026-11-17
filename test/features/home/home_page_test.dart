@@ -5,6 +5,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('first load shows a noninteractive placeholder then real cards', (
+    tester,
+  ) async {
+    Widget page({required bool loading, required List<HomeDiscovery> cards}) =>
+        MaterialApp(
+          home: HomePage(
+            onMenu: () {},
+            onExplore: () {},
+            onChat: () {},
+            onVoice: () {},
+            onDiscovery: (_) {},
+            loadingDiscoveries: loading,
+            discoveries: cards,
+          ),
+        );
+    await tester.pumpWidget(page(loading: true, cards: []));
+    expect(
+      find.byKey(const ValueKey('home-discoveries-loading')),
+      findsOneWidget,
+    );
+    expect(find.text('去看看'), findsNothing);
+    await tester.pumpWidget(
+      page(loading: true, cards: HomePage.designDiscoveries),
+    );
+    expect(
+      find.byKey(const ValueKey('home-discoveries-loading')),
+      findsNothing,
+    );
+    expect(find.text('去看看'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'home preserves scene width and controls across sizes and text scales',
     (tester) async {

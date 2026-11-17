@@ -45,5 +45,46 @@ void main() {
       [0x32, 0xA8, 0xA2, 0xFF],
     );
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
+  testWidgets(
+    'explore collapses after inactivity and remains clickable and draggable',
+    (tester) async {
+      var taps = 0;
+      var movement = Offset.zero;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: ChatExploreBanner(
+                onPressed: () => taps++,
+                onDragUpdate: (delta) => movement += delta,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('先去探索世界'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 7));
+      expect(find.text('先去探索世界'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('先去探索世界'), findsNothing);
+      expect(tester.getSize(find.byType(ChatExploreBanner)).width, 68);
+      await tester.tap(find.byType(ChatExploreBanner));
+      expect(taps, 1);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ChatExploreBanner)),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveBy(const Offset(40, -20));
+      await gesture.up();
+      expect(movement.dx, greaterThan(0));
+      expect(taps, 1);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

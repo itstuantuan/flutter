@@ -13,6 +13,8 @@ import 'package:bots/features/onboarding/interests_page.dart';
 import 'package:bots/features/plaza/plaza_page.dart';
 import 'package:bots/features/auth/account_service.dart';
 
+import '../exploration/fakes.dart';
+
 import 'phone_login_page_test.dart' show FakePhoneAccount, fillPhone;
 
 class NewAccount extends FakePhoneAccount {
@@ -33,12 +35,44 @@ class TestProfile extends StartupProfileStore {
 }
 
 void main() {
+  testWidgets(
+    'restored new session resumes onboarding when its first save failed',
+    (tester) async {
+      const session = AccountSession(
+        registered: 1,
+        uid: 'interrupted-registration',
+        nick: '',
+        avatar: '',
+        phone: '86-13800138000',
+        product: 'bots',
+        platform: 'ios',
+        token: 'test',
+      );
+      final account = NewAccount()..restored = session;
+      final profile = TestProfile()..value = {'introDone': true};
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthGate(
+            service: account,
+            profileStore: profile,
+            experienceBuilder: (_) => const Text('home'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(NamePage), findsOneWidget);
+      expect(profile.value['registrationChats'], {session.uid: 'pending'});
+    },
+  );
+
   testWidgets('registration chat resumes until skipped, then stays completed', (
     tester,
   ) async {
     FlutterSecureStorage.setMockInitialValues({});
     final profile = TestProfile()..value = {'introDone': true, 'name': '小宝'};
     final account = NewAccount();
+    final bots = FakeBotService();
+    addTearDown(bots.events.close);
     const session = AccountSession(
       registered: 1,
       uid: 'new-user',
@@ -58,6 +92,7 @@ void main() {
       home: AuthGate(
         key: ValueKey(key),
         service: account,
+        chatService: bots,
         profileStore: profile,
       ),
     );
@@ -78,24 +113,32 @@ void main() {
     await tester.pumpWidget(app(2));
     await tester.pumpAndSettle();
     expect(find.text('跳过'), findsOneWidget);
-    profile.fail = true;
     await tester.tap(find.text('跳过'));
-    await tester.pumpAndSettle();
-    expect(find.byType(ChatPage), findsOneWidget);
-    expect(find.text('保存失败，请重试'), findsOneWidget);
-    profile.fail = false;
-    await tester.tap(find.text('跳过'));
-    await tester.pumpAndSettle();
-    expect(find.byType(HomePage), findsOneWidget);
-    expect(profile.value['registrationChats'], {'new-user': 'done'});
-
-    tester.widget<HomePage>(find.byType(HomePage)).onExplore();
     await tester.pumpAndSettle();
     expect(find.byType(InterestsPage), findsOneWidget);
+    expect(profile.value['registrationChats'], {'new-user': 'pending'});
+    // Returning without selecting interests preserves the first-chat flow.
+    Navigator.of(tester.element(find.byType(InterestsPage))).pop();
+    await tester.pumpAndSettle();
+    tester.widget<ChatPage>(find.byType(ChatPage)).onExplore();
+    await tester.pumpAndSettle();
+    expect(find.byType(InterestsPage), findsOneWidget);
+    profile.fail = true;
+    expect(
+      await tester.widget<InterestsPage>(find.byType(InterestsPage)).onStart([
+        '音乐',
+      ]),
+      isFalse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(InterestsPage), findsOneWidget);
+    expect(profile.value['registrationChats'], {'new-user': 'pending'});
+    profile.fail = false;
     await tester.widget<InterestsPage>(find.byType(InterestsPage)).onStart([
       '音乐',
     ]);
     await tester.pumpAndSettle();
+    expect(profile.value['registrationChats'], {'new-user': 'done'});
     expect(find.byType(PlazaPage), findsOneWidget);
     await tester.tap(find.byTooltip('返回首页'));
     await tester.pumpAndSettle();
@@ -104,6 +147,31 @@ void main() {
     expect(find.byType(InterestsPage), findsNothing);
     expect(find.byType(PlazaPage), findsOneWidget);
     await tester.tap(find.byTooltip('返回首页'));
+    await tester.pumpAndSettle();
+
+    // The real home card path must load/locate the original server turn without
+    // notifying the previous route during the new route's build.
+    bots.homeCards = [
+      {
+        'taskId': 'task-1',
+        'materialId': 'material-2',
+        'title': '发现2',
+        'text': '推荐理由',
+      },
+    ];
+    bots.located = {
+      'anchorTurnId': 42,
+      'turns': [discoveryTurn()],
+    };
+    tester.widget<HomePage>(find.byType(HomePage)).onExplore();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('返回首页'));
+    await tester.pumpAndSettle();
+    tester.widget<HomePage>(find.byType(HomePage)).onDiscovery(0);
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChatPage>(find.byType(ChatPage)).anchorTurnId, 42);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
 
     tester.widget<HomePage>(find.byType(HomePage)).onChat();

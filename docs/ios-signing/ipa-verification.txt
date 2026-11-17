@@ -1,0 +1,6 @@
+IPA: build/ios/ipa/Pals.ipa
+Bundle ID: com.viitor.bot
+Certificate SHA-1: B34797E67D840C52BE605D178E72525207719B4D
+Public key: matches filing-info.txt
+Signature verification: codesign --verify --deep --strict passed
+IPA SHA-256: 6ac204132f34f3aaf9a586cbba759370f9c63583a7548a117b6269285dd9beb3

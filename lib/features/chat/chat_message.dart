@@ -22,10 +22,33 @@ class VoiceClip {
 }
 
 class ChatMessage {
-  const ChatMessage(this.text, {this.isUser = false, this.voice});
+  const ChatMessage(
+    this.text, {
+    this.isUser = false,
+    this.voice,
+    this.turnId,
+    this.referenceTaskId,
+    this.cards = const [],
+    this.createdAt,
+    this.animateReply = false,
+  });
   final String text;
   final bool isUser;
   final VoiceClip? voice;
+  // Server identity is retained for navigation; a discovery stays one turn.
+  final int? turnId;
+  final String? referenceTaskId;
+  final List<Map<String, dynamic>> cards;
+  // Older responses may contain only material IDs/titles and aggregate text.
+  bool get hasStructuredDiscoveries =>
+      !isUser &&
+      cards.any(
+        (card) =>
+            (card['content'] as String? ?? '').trim().isNotEmpty ||
+            (card['summary'] as String? ?? '').trim().isNotEmpty,
+      );
+  final DateTime? createdAt;
+  final bool animateReply;
 
   factory ChatMessage.fromStored(String value) {
     final separator = value.indexOf('：');
@@ -38,6 +61,9 @@ class ChatMessage {
   factory ChatMessage.fromJson(Map<String, dynamic> value) => ChatMessage(
     value['text'] as String? ?? '',
     isUser: value['isUser'] == true,
+    createdAt: value['createdAt'] is int
+        ? DateTime.fromMillisecondsSinceEpoch(value['createdAt'] as int)
+        : null,
     voice: value['voice'] is Map
         ? VoiceClip.fromJson(Map<String, dynamic>.from(value['voice'] as Map))
         : null,
@@ -46,6 +72,7 @@ class ChatMessage {
   Map<String, dynamic> toJson() => {
     'text': text,
     'isUser': isUser,
+    if (createdAt != null) 'createdAt': createdAt!.millisecondsSinceEpoch,
     if (voice != null) 'voice': voice!.toJson(),
   };
 }

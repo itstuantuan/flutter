@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
@@ -18,3 +19,5 @@ Future<void> deleteVoiceFile(String path) async {
   final file = File(path);
   if (await file.exists()) await file.delete();
 }
+
+Future<Uint8List> readVoiceBytes(String path) => File(path).readAsBytes();

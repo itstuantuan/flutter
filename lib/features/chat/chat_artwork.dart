@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -158,99 +159,235 @@ class ChatGreeting extends StatelessWidget {
   );
 }
 
-class ChatExploreBanner extends StatelessWidget {
-  const ChatExploreBanner({super.key, required this.onPressed});
+class ChatExploreBanner extends StatefulWidget {
+  const ChatExploreBanner({
+    super.key,
+    required this.onPressed,
+    this.collapseAfter = const Duration(seconds: 8),
+    this.onDragUpdate,
+    this.onCollapsedChanged,
+    this.initiallyCollapsed = false,
+  });
   final VoidCallback? onPressed;
+  final Duration collapseAfter;
+  final bool initiallyCollapsed;
+  final ValueChanged<Offset>? onDragUpdate;
+  final ValueChanged<bool>? onCollapsedChanged;
+  @override
+  State<ChatExploreBanner> createState() => _ChatExploreBannerState();
+}
+
+class _ChatExploreBannerState extends State<ChatExploreBanner> {
+  Timer? _timer;
+  late bool _collapsed = widget.initiallyCollapsed;
+  Offset _lastDrag = Offset.zero;
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    if (_collapsed) return;
+    _timer = Timer(widget.collapseAfter, () {
+      if (!mounted) return;
+      setState(() => _collapsed = true);
+      widget.onCollapsedChanged?.call(true);
+    });
+  }
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: '先去探索世界',
-    child: ExcludeSemantics(
-      child: GestureDetector(
-        onTap: onPressed,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: 188,
-          height: 48,
-          child: Stack(
-            children: [
-              Positioned(
-                top: 4,
-                left: 0,
-                width: 188,
-                height: 40,
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Widget _compact() => SizedBox(
+    width: 68,
+    height: 49,
+    child: Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 6,
+          width: 68,
+          height: 43,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(21.5),
+            child: Image.asset(
+              'assets/chat/explore_compact_background.png',
+              fit: BoxFit.fill,
+            ),
+          ),
+        ),
+        Positioned(
+          left: 45,
+          top: 22,
+          child: chatSvg('banner_chevrons', width: 11, height: 10.987),
+        ),
+        Positioned(
+          left: 0,
+          top: -1,
+          width: 41.088,
+          height: 42.053,
+          child: Transform.rotate(
+            angle: 3.78 * math.pi / 180,
+            child: Center(
+              child: SizedBox(
+                width: 38.561,
+                height: 39.596,
                 child: ClipRect(
                   child: Stack(
                     children: [
                       Positioned(
-                        left: -49,
-                        top: 0,
-                        child: chatSvg(
-                          'banner_background',
-                          width: 237,
-                          height: 40,
+                        left: -38.561 * .2013,
+                        top: -39.596 * .1634,
+                        width: 38.561 * 1.3423,
+                        height: 39.596 * 1.3072,
+                        child: Image.asset(
+                          'assets/chat/explore_magnifier.png',
+                          fit: BoxFit.fill,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              Positioned(
-                left: 29,
-                top: 33.97,
-                child: chatSvg('banner_star_5', width: 5, height: 4.994),
-              ),
-              Positioned(
-                left: 56,
-                top: 13.99,
-                child: chatSvg('banner_star_3', width: 3, height: 2.996),
-              ),
-              Positioned(
-                left: 48,
-                top: 7,
-                child: chatSvg('banner_star_10', width: 10, height: 8.989),
-              ),
-              Positioned(
-                left: 18,
-                top: 8.93,
-                width: 49,
-                height: 29.905,
-                child: Center(
-                  child: Transform.rotate(
-                    angle: -14.98 * math.pi / 180,
-                    child: chatSvg(
-                      'banner_ring',
-                      width: 46.7007,
-                      height: 19.7298,
-                    ),
-                  ),
-                ),
-              ),
-              const Positioned(
-                left: 33,
-                top: 14,
-                child: Text(
-                  '先去探索世界',
-                  style: TextStyle(
-                    inherit: false,
-                    textBaseline: TextBaseline.alphabetic,
-                    fontFamily: 'PingFang SC',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1,
-                    height: 1.25,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 139,
-                top: 19.98,
-                child: chatSvg('banner_chevrons', width: 11, height: 10.987),
-              ),
-            ],
+            ),
           ),
+        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: '先去探索世界',
+    hint: _collapsed ? '长按可拖动位置' : null,
+    child: ExcludeSemantics(
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        onLongPressStart: _collapsed && widget.onDragUpdate != null
+            ? (_) {
+                _timer?.cancel();
+                _lastDrag = Offset.zero;
+              }
+            : null,
+        onLongPressMoveUpdate: _collapsed && widget.onDragUpdate != null
+            ? (details) {
+                widget.onDragUpdate!(details.offsetFromOrigin - _lastDrag);
+                _lastDrag = details.offsetFromOrigin;
+              }
+            : null,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedSize(
+          alignment: Alignment.centerLeft,
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 260),
+          curve: Curves.easeInOutCubic,
+          child: _collapsed
+              ? _compact()
+              : SizedBox(
+                  width: 188,
+                  height: 48,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        top: 4,
+                        left: 0,
+                        width: 188,
+                        height: 40,
+                        child: ClipRect(
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                left: -49,
+                                top: 0,
+                                child: chatSvg(
+                                  'banner_background',
+                                  width: 237,
+                                  height: 40,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 29,
+                        top: 33.97,
+                        child: chatSvg(
+                          'banner_star_5',
+                          width: 5,
+                          height: 4.994,
+                        ),
+                      ),
+                      Positioned(
+                        left: 56,
+                        top: 13.99,
+                        child: chatSvg(
+                          'banner_star_3',
+                          width: 3,
+                          height: 2.996,
+                        ),
+                      ),
+                      Positioned(
+                        left: 48,
+                        top: 7,
+                        child: chatSvg(
+                          'banner_star_10',
+                          width: 10,
+                          height: 8.989,
+                        ),
+                      ),
+                      Positioned(
+                        left: 18,
+                        top: 8.93,
+                        width: 49,
+                        height: 29.905,
+                        child: Center(
+                          child: Transform.rotate(
+                            angle: -14.98 * math.pi / 180,
+                            child: chatSvg(
+                              'banner_ring',
+                              width: 46.7007,
+                              height: 19.7298,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Positioned(
+                        left: 33,
+                        top: 14,
+                        child: Text(
+                          '先去探索世界',
+                          style: TextStyle(
+                            inherit: false,
+                            textBaseline: TextBaseline.alphabetic,
+                            fontFamily: 'PingFang SC',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1,
+                            height: 1.25,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 139,
+                        top: 19.98,
+                        child: chatSvg(
+                          'banner_chevrons',
+                          width: 11,
+                          height: 10.987,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ),
     ),
@@ -258,9 +395,17 @@ class ChatExploreBanner extends StatelessWidget {
 }
 
 class ChatBubble extends StatelessWidget {
-  const ChatBubble({super.key, required this.text, required this.isUser});
+  const ChatBubble({
+    super.key,
+    required this.text,
+    required this.isUser,
+    this.highlightText,
+    this.textKey,
+  });
   final String text;
   final bool isUser;
+  final String? highlightText;
+  final Key? textKey;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -279,12 +424,10 @@ class ChatBubble extends StatelessWidget {
         textDirection: Directionality.of(context),
         textScaler: MediaQuery.textScalerOf(context),
       )..layout(maxWidth: math.max(1, maxWidth - 24));
-      final width = isUser
-          ? (measurement.width.ceilToDouble() + 24).clamp(
-              math.min(94.0, maxWidth),
-              maxWidth,
-            )
-          : maxWidth;
+      final width = (measurement.width.ceilToDouble() + 24).clamp(
+        0.0,
+        maxWidth,
+      );
       measurement.dispose();
       return Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -293,15 +436,18 @@ class ChatBubble extends StatelessWidget {
           child: Stack(
             children: [
               Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, bounds) {
-                    final asset = isUser
-                        ? (bounds.maxHeight > 40 ? 'outgoing_long' : 'outgoing')
-                        : (bounds.maxHeight > 80
-                              ? 'incoming_long'
-                              : 'incoming');
-                    return chatSvg(asset, fit: BoxFit.fill);
-                  },
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: isUser
+                        ? const Color(0xFFD6CBFF)
+                        : const Color(0x80000000),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(isUser ? 12 : 14),
+                      topRight: Radius.circular(isUser ? 12 : 14),
+                      bottomLeft: Radius.circular(isUser ? 12 : 2),
+                      bottomRight: Radius.circular(isUser ? 2 : 14),
+                    ),
+                  ),
                 ),
               ),
               ConstrainedBox(
@@ -311,7 +457,7 @@ class ChatBubble extends StatelessWidget {
                     horizontal: 12,
                     vertical: isUser ? 10 : 12,
                   ),
-                  child: Text(text, style: style),
+                  child: _text(style),
                 ),
               ),
             ],
@@ -320,6 +466,32 @@ class ChatBubble extends StatelessWidget {
       );
     },
   );
+
+  Widget _text(TextStyle style) {
+    final highlight = highlightText;
+    final index = highlight == null || highlight.isEmpty
+        ? -1
+        : text.indexOf(highlight);
+    if (index < 0) return Text(text, key: textKey, style: style);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: text.substring(0, index)),
+          TextSpan(
+            text: highlight,
+            style: const TextStyle(
+              backgroundColor: Color(0xFFFFDF84),
+              color: Color(0xFF38224F),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(text: text.substring(index + highlight!.length)),
+        ],
+      ),
+      key: textKey,
+      style: style,
+    );
+  }
 }
 
 /// Original transparent Figma layers, node 305:4497, at their native geometry.

@@ -6,7 +6,12 @@ import 'plaza_scenarios.dart';
 
 /// A single story per visit; rebuilds and foregrounding do not redraw it.
 class PlazaDialogue extends StatefulWidget {
-  const PlazaDialogue({super.key, required this.scenario});
+  const PlazaDialogue({
+    super.key,
+    required this.scenario,
+    this.displayName = '',
+  });
+  final String displayName;
   final PlazaScenario scenario;
   @override
   State<PlazaDialogue> createState() => _PlazaDialogueState();
@@ -106,10 +111,10 @@ class _PlazaDialogueState extends State<PlazaDialogue>
                   excludeFromSemantics: true,
                 ),
                 const SizedBox(width: 4),
-                const Flexible(
+                Flexible(
                   child: Text(
-                    '欢迎Viitor进入创作广场',
-                    style: TextStyle(
+                    '欢迎加入创造广场',
+                    style: const TextStyle(
                       fontFamily: 'PingFang SC',
                       fontSize: 12,
                       height: 17 / 12,
