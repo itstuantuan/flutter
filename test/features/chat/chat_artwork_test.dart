@@ -6,6 +6,40 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'expanded banner drags vertically and pauses collapse until release',
+    (tester) async {
+      var movement = Offset.zero;
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ChatExploreBanner(
+                onPressed: () => taps++,
+                onDragUpdate: (delta) => movement += delta,
+              ),
+            ),
+          ),
+        ),
+      );
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ChatExploreBanner)),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveBy(const Offset(30, 60));
+      await tester.pump(const Duration(seconds: 4));
+      expect(find.text('先去探索世界'), findsOneWidget);
+      expect(movement, const Offset(0, 60));
+      await gesture.up();
+      expect(taps, 0);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('先去探索世界'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('explore banner notch exposes the page background', (
     tester,
   ) async {
@@ -67,7 +101,7 @@ void main() {
       );
       await tester.pump();
       expect(find.text('先去探索世界'), findsOneWidget);
-      await tester.pump(const Duration(seconds: 7));
+      await tester.pump(const Duration(seconds: 2));
       expect(find.text('先去探索世界'), findsOneWidget);
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
@@ -81,7 +115,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       await gesture.moveBy(const Offset(40, -20));
       await gesture.up();
-      expect(movement.dx, greaterThan(0));
+      expect(movement.dx, 0);
+      expect(movement.dy, lessThan(0));
       expect(taps, 1);
       await tester.pumpWidget(const SizedBox());
       expect(tester.takeException(), isNull);

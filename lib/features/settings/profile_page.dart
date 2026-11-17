@@ -247,10 +247,10 @@ class _ProfilePageState extends State<ProfilePage> {
                             constraints: const BoxConstraints(minHeight: 56),
                             child: Row(
                               children: [
-                                const Flexible(child: Text(
+                                const Text(
                                   'ViiTor UID',
                                   style: TextStyle(fontSize: 15),
-                                )),
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(

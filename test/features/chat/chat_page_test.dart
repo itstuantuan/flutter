@@ -32,6 +32,33 @@ class FakePlayback implements VoicePlayback {
 
 void main() {
   testWidgets(
+    'onboarding explore starts below header and remains attached to left edge',
+    (tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatPage(onExit: () {}, onExplore: () {}),
+        ),
+      );
+      await tester.pump();
+      final banner = find.byType(ChatExploreBanner);
+      expect(tester.getRect(banner).left, 0);
+      expect(tester.getRect(banner).top, 105);
+      final gesture = await tester.startGesture(tester.getCenter(banner));
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveBy(const Offset(100, 180));
+      await tester.pump();
+      expect(tester.getRect(banner).left, 0);
+      expect(tester.getRect(banner).top, 285);
+      await gesture.up();
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'default chat header uses companion name instead of design sample',
     (tester) async {
       await tester.pumpWidget(
@@ -145,7 +172,7 @@ void main() {
             );
             if (scrolling.position.maxScrollExtent > 50) {
               await tester.dragFrom(
-                Offset(size.width - 30, banner.center.dy),
+                Offset(size.width - 30, viewport.center.dy),
                 const Offset(0, 50),
               );
               await tester.pumpAndSettle();

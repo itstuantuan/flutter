@@ -165,8 +165,6 @@ class HomeSidebar extends StatelessWidget {
                               _row('interests', '兴趣选择', 'interests'),
                             ], opacity: .08),
                             const SizedBox(height: 20),
-                            _group([_row('feedback', '反馈问题', 'feedback')]),
-                            const SizedBox(height: 14),
                             _group([_row('about', '关于我们', 'about')]),
                             const SizedBox(height: 14),
                             _group([

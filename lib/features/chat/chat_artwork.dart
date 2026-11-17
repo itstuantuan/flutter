@@ -28,7 +28,7 @@ class ChatBackground extends StatelessWidget {
       children: [
         const ColoredBox(color: Colors.black),
         Opacity(
-          opacity: 0.77,
+          opacity: 0.5,
           child: Image.asset(
             'assets/chat/background.png',
             fit: BoxFit.cover,
@@ -163,7 +163,7 @@ class ChatExploreBanner extends StatefulWidget {
   const ChatExploreBanner({
     super.key,
     required this.onPressed,
-    this.collapseAfter = const Duration(seconds: 8),
+    this.collapseAfter = const Duration(seconds: 3),
     this.onDragUpdate,
     this.onCollapsedChanged,
     this.initiallyCollapsed = false,
@@ -265,28 +265,32 @@ class _ChatExploreBannerState extends State<ChatExploreBanner> {
   Widget build(BuildContext context) => Semantics(
     button: true,
     label: '先去探索世界',
-    hint: _collapsed ? '长按可拖动位置' : null,
+    hint: widget.onDragUpdate != null ? '长按可上下拖动位置' : null,
     child: ExcludeSemantics(
       child: GestureDetector(
         onTap: widget.onPressed,
-        onLongPressStart: _collapsed && widget.onDragUpdate != null
+        onLongPressStart: widget.onDragUpdate != null
             ? (_) {
                 _timer?.cancel();
                 _lastDrag = Offset.zero;
               }
             : null,
-        onLongPressMoveUpdate: _collapsed && widget.onDragUpdate != null
+        onLongPressMoveUpdate: widget.onDragUpdate != null
             ? (details) {
-                widget.onDragUpdate!(details.offsetFromOrigin - _lastDrag);
+                widget.onDragUpdate!(
+                  Offset(0, details.offsetFromOrigin.dy - _lastDrag.dy),
+                );
                 _lastDrag = details.offsetFromOrigin;
               }
             : null,
+        onLongPressEnd: widget.onDragUpdate != null ? (_) => _schedule() : null,
+        onLongPressCancel: widget.onDragUpdate != null ? _schedule : null,
         behavior: HitTestBehavior.opaque,
         child: AnimatedSize(
           alignment: Alignment.centerLeft,
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
-              : const Duration(milliseconds: 260),
+              : const Duration(milliseconds: 200),
           curve: Curves.easeInOutCubic,
           child: _collapsed
               ? _compact()

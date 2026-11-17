@@ -5,6 +5,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'explore stays on left edge and starts centered while dragging vertically',
+    (tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomePage(
+            onMenu: () {},
+            onExplore: () {},
+            onChat: () {},
+            onVoice: () {},
+            onDiscovery: (_) {},
+          ),
+        ),
+      );
+      await tester.pump();
+      final banner = find.byKey(const ValueKey('home-explore-banner'));
+      expect(tester.getRect(banner).left, 0);
+      expect(tester.getRect(banner).center.dy, 406);
+      final gesture = await tester.startGesture(tester.getCenter(banner));
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveBy(const Offset(90, -130));
+      await tester.pump();
+      expect(tester.getRect(banner).left, 0);
+      expect(tester.getRect(banner).center.dy, 276);
+      await gesture.up();
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(tester.getRect(banner).left, 0);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('first load shows a noninteractive placeholder then real cards', (
     tester,
   ) async {

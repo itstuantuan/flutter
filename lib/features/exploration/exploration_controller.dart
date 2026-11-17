@@ -6,6 +6,7 @@ import '../../core/network/api_client.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_service.dart';
 import 'exploration_store.dart';
+import 'discovery_policy.dart';
 
 const interestIds = {
   '音乐': 'music',
@@ -38,7 +39,9 @@ class ExplorationController extends ChangeNotifier {
   final ChatService service;
   final ExplorationStore store;
   late final ChatController chat;
-  Map<String, dynamic> home = {}, progress = {};
+  Map<String, dynamic> home = {}, progress = {}, square = {};
+  bool progressUnavailable = false;
+  bool _squarePending = false;
   final _events = <String, Map<String, dynamic>>{};
   final _completedResults = <String, Map<String, dynamic>>{};
   final _displayed = <String>{};
@@ -87,7 +90,8 @@ class ExplorationController extends ChangeNotifier {
       );
       _pendingStartId = saved['pendingStartId'] as String?;
       final cached = saved['cards'] as List? ?? [];
-      home = {'cards': cached.take(3).toList()};
+      home = {'cards': cached.take(maxDiscoveryCards).toList()};
+      if (cards.isNotEmpty) chat.setVisibleDiscoveryCards(cards);
       ready = true;
       if (_foreground) {
         unawaited(chat.start());
@@ -104,7 +108,7 @@ class ExplorationController extends ChangeNotifier {
       'displayed': _displayed.toList(),
       'pendingAcks': {..._pendingAcks},
       'pendingStartId': _pendingStartId,
-      'cards': cards.take(3).toList(),
+      'cards': cards.take(maxDiscoveryCards).toList(),
     };
     final next = _writeQueue.then((_) => store.write(snapshot));
     _writeQueue = next.catchError((_) {});
@@ -127,8 +131,11 @@ class ExplorationController extends ChangeNotifier {
     // Empty/next-day responses do not erase an already displayed discovery.
     home = {
       ...value,
-      'cards': incoming.isEmpty ? previousCards : incoming.take(3).toList(),
+      'cards': incoming.isEmpty
+          ? previousCards
+          : incoming.take(maxDiscoveryCards).toList(),
     };
+    if (cards.isNotEmpty) chat.setVisibleDiscoveryCards(cards);
     if (incoming.isNotEmpty) {
       _homeLoaded = true;
       _cacheCards();
@@ -167,7 +174,7 @@ class ExplorationController extends ChangeNotifier {
         home = {
           ...home,
           'cards': [
-            for (final rawCard in rawCards.take(3))
+            for (final rawCard in rawCards.take(maxDiscoveryCards))
               {
                 'kind': 'discovery',
                 'taskId': task,
@@ -179,6 +186,7 @@ class ExplorationController extends ChangeNotifier {
               },
           ],
         };
+        chat.setVisibleDiscoveryCards(cards);
         _cacheCards();
         _notify();
         return;
@@ -310,6 +318,12 @@ class ExplorationController extends ChangeNotifier {
       return;
     }
     _completedResults[event['taskId'] as String] = event;
+    if (_watchTask == event['taskId']) {
+      progress = {...event, 'phase': 'complete'};
+      progressUnavailable = false;
+      _pollTimer?.cancel();
+      _notify();
+    }
     if (_displayed.contains(id)) {
       if (_pendingAcks.containsKey(id)) unawaited(retryAcknowledgements());
       return;
@@ -402,6 +416,8 @@ class ExplorationController extends ChangeNotifier {
   void watchPlaza(String taskId) {
     _watchTask = taskId;
     progress = {};
+    square = {};
+    progressUnavailable = false;
     _pollTimer?.cancel();
     if (_foreground) unawaited(_poll());
   }
@@ -411,10 +427,32 @@ class ExplorationController extends ChangeNotifier {
     _pollTimer?.cancel();
   }
 
+  Future<void> _refreshSquare(String task) async {
+    if (_squarePending) return;
+    _squarePending = true;
+    try {
+      final result = await service.request(
+        '/explorations/${Uri.encodeComponent(task)}/square',
+        cancelToken: _cancel,
+      );
+      if (!_disposed &&
+          _watchTask == task &&
+          (result['taskId'] == null || result['taskId'] == task)) {
+        square = result;
+        _notify();
+      }
+    } catch (_) {
+      // Elapsed time is optional; progress and completion must remain usable.
+    } finally {
+      _squarePending = false;
+    }
+  }
+
   Future<void> _poll() async {
     final task = _watchTask;
     if (_disposed || !_foreground || _polling || task == null) return;
     _polling = true;
+    unawaited(_refreshSquare(task));
     var finished = false;
     try {
       final result = await service.request(
@@ -422,8 +460,12 @@ class ExplorationController extends ChangeNotifier {
         cancelToken: _cancel,
       );
       if (_disposed || _watchTask != task) return;
-      progress = result;
-      finished = {'complete', 'empty', 'failed'}.contains(result['phase']);
+      final completed = _completedResults[task];
+      progress = completed == null
+          ? result
+          : {...completed, 'phase': 'complete'};
+      progressUnavailable = false;
+      finished = {'complete', 'empty', 'failed'}.contains(progress['phase']);
       _notify();
       if (finished) {
         await refreshHome();
@@ -431,11 +473,22 @@ class ExplorationController extends ChangeNotifier {
       }
     } catch (e) {
       finished = false;
-      if (!_disposed) await reportError(e);
+      if (!_disposed && _watchTask == task) {
+        if (_completedResults.containsKey(task)) {
+          finished = true;
+        } else {
+          progressUnavailable = true;
+          await reportError(e);
+        }
+      }
     } finally {
       _polling = false;
-      if (!_disposed && _foreground && _watchTask == task && !finished) {
-        _pollTimer = Timer(const Duration(seconds: 3), _poll);
+      if (!_disposed && _foreground && _watchTask != null) {
+        if (_watchTask != task) {
+          unawaited(_poll());
+        } else if (!finished) {
+          _pollTimer = Timer(const Duration(seconds: 3), _poll);
+        }
       }
     }
   }

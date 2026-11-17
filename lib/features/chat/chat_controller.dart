@@ -43,6 +43,12 @@ class ChatController extends ChangeNotifier {
   int? anchorTurnId;
   int locationRevision = 0;
   String? referenceTaskId, referenceMaterialId;
+  List<Map<String, dynamic>>? visibleDiscoveryCards;
+  void setVisibleDiscoveryCards(List<Map<String, dynamic>> cards) {
+    visibleDiscoveryCards = cards;
+    _notify();
+  }
+
   String? get sessionId => _sessionId;
   bool get unauthorized => _authFailed;
 
@@ -288,7 +294,20 @@ class ChatController extends ChangeNotifier {
         throw const ChatException('对应发现尚未加载，请重试');
       }
       merge(result);
-      anchorTurnId = anchor;
+      // A task may publish one turn per card. The API anchor identifies the
+      // task's first turn, so resolve the selected material within that task.
+      final selectedTurn = materialId == null
+          ? null
+          : _turns.values
+                .where(
+                  (turn) =>
+                      (turn['id'] == anchor ||
+                          turn['referenceTaskId'] == taskId) &&
+                      _cards(turn)
+                          .any((card) => card['materialId'] == materialId),
+                )
+                .firstOrNull;
+      anchorTurnId = selectedTurn?['id'] as int? ?? anchor;
       referenceTaskId = taskId;
       referenceMaterialId = materialId;
       locationRevision++;

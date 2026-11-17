@@ -3,6 +3,58 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('new home button returns to the previous page', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const PlazaPage()),
+              ),
+              child: const Text('进入广场'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('进入广场'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('plaza-home-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('进入广场'), findsOneWidget);
+  });
+  testWidgets('progress bubble fits small screens and large text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final size in [
+      const Size(375, 812),
+      const Size(320, 568),
+      const Size(812, 375),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: size, textScaler: TextScaler.linear(2)),
+            child: const PlazaPage(
+              explorationPhase: 'searching',
+              explorationElapsedSeconds: 65,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Pal 努力探索中'), findsOneWidget);
+      expect(find.textContaining('%'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
   testWidgets('plaza chat and microphone invoke their distinct actions', (
     tester,
   ) async {

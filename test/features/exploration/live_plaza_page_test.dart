@@ -8,6 +8,64 @@ import 'fakes.dart';
 
 void main() {
   testWidgets(
+    'bubble follows server elapsed time, connection errors and completion',
+    (tester) async {
+      final service = FakeBotService();
+      final controller = ExplorationController(
+        service: service,
+        store: MemoryExplorationStore(),
+        displayName: '测试',
+      )..pause();
+      await controller.initialize();
+      controller.resume();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LivePlazaPage(
+            controller: controller,
+            taskId: 'task-1',
+            onChat: (_) async {},
+            onOpenDiscovery: (_, _) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Pal 努力探索中'), findsOneWidget);
+      expect(find.text('已探索 12 秒 · 发现后告诉你'), findsOneWidget);
+      service.square = {'elapsedSeconds': 65};
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('已探索 1 分 5 秒'), findsOneWidget);
+      service.failProgress = true;
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('正在同步探索状态'), findsOneWidget);
+      service.failProgress = false;
+      service.progress = {
+        'phase': 'complete',
+        'cards': completionEvent()['cards'],
+      };
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('Pal 带着发现回来啦'), findsOneWidget);
+      expect(find.textContaining('%'), findsNothing);
+      final polls = service.calls
+          .where((c) => (c['path'] as String).endsWith('/progress'))
+          .length;
+      await tester.pump(const Duration(seconds: 6));
+      expect(
+        service.calls
+            .where((c) => (c['path'] as String).endsWith('/progress'))
+            .length,
+        polls,
+      );
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await service.events.close();
+    },
+  );
+
+  testWidgets(
     'completion automatically presents once and acknowledges after display',
     (tester) async {
       tester.view.physicalSize = const Size(375, 812);
@@ -39,12 +97,24 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(PlazaDiscoveryDialog), findsNothing);
-      controller.receiveCompletion(completionEvent());
+      controller.receiveCompletion({
+        ...completionEvent(),
+        'cards': [
+          for (var i = 1; i <= 5; i++)
+            {'materialId': 'material-$i', 'title': '发现$i', 'summary': '摘要$i'},
+        ],
+      });
       expect(controller.pendingEvents, hasLength(1));
       expect(tester.binding.lifecycleState, AppLifecycleState.resumed);
       expect(store.value['displayed'], isNull);
       await tester.pumpAndSettle();
       expect(find.byType(PlazaDiscoveryDialog), findsOneWidget);
+      expect(
+        tester
+            .widget<PlazaDiscoveryDialog>(find.byType(PlazaDiscoveryDialog))
+            .discoveries,
+        hasLength(3),
+      );
       expect(find.text('发现1'), findsOneWidget);
       expect(store.value['displayed'], ['task-1']);
       expect(

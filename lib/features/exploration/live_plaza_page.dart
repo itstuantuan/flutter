@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../plaza/plaza_page.dart';
 import '../plaza/plaza_discovery.dart';
 import 'exploration_controller.dart';
+import 'discovery_policy.dart';
 
 /// Keeps the existing local plaza stories; only completion presentation uses the server.
 class LivePlazaPage extends StatefulWidget {
@@ -37,6 +38,16 @@ class _LivePlazaPageState extends State<LivePlazaPage>
     widget.controller.addListener(_refresh);
     if (widget.taskId != null) widget.controller.watchPlaza(widget.taskId!);
     _refresh();
+  }
+
+  @override
+  void didUpdateWidget(covariant LivePlazaPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.taskId != widget.taskId) {
+      widget.controller.stopWatchingPlaza();
+      _terminalShown = null;
+      if (widget.taskId != null) widget.controller.watchPlaza(widget.taskId!);
+    }
   }
 
   @override
@@ -98,7 +109,7 @@ class _LivePlazaPageState extends State<LivePlazaPage>
     _lastPresentedTask = event['taskId'] as String?;
     final eventId = event['eventId'] as String?;
     if (eventId != null) _presentedHere.add(eventId);
-    final cards = (event['cards'] as List).cast<Map>();
+    final cards = (event['cards'] as List).cast<Map>().take(maxDiscoveryCards);
     final discoveries = cards
         .map(
           (card) => PlazaDiscovery(
@@ -176,10 +187,21 @@ class _LivePlazaPageState extends State<LivePlazaPage>
   }
 
   @override
-  Widget build(BuildContext context) => PlazaPage(
-    displayName: widget.controller.chat.displayName,
-    onChat: () => _chat(false),
-    onVoice: () => _chat(true),
-    onDiscovery: _openDiscovery,
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) => PlazaPage(
+      displayName: widget.controller.chat.displayName,
+      onChat: () => _chat(false),
+      onVoice: () => _chat(true),
+      onDiscovery: _openDiscovery,
+      explorationPhase: widget.taskId == null
+          ? null
+          : widget.controller.progress['phase'] as String? ?? 'loading',
+      explorationElapsedSeconds:
+          widget.controller.square['elapsedSeconds'] is num
+          ? (widget.controller.square['elapsedSeconds'] as num).toInt()
+          : null,
+      progressUnavailable: widget.controller.progressUnavailable,
+    ),
   );
 }

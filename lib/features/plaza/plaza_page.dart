@@ -5,6 +5,7 @@ import '../chat/chat_page.dart';
 import 'plaza_dialogue.dart';
 import 'plaza_discovery.dart';
 import 'plaza_scenarios.dart';
+import 'plaza_progress_bubble.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,8 +21,14 @@ class PlazaPage extends StatefulWidget {
     this.initialDiscovery,
     this.discoveries = const [],
     this.onDiscovery,
+    this.explorationPhase,
+    this.explorationElapsedSeconds,
+    this.progressUnavailable = false,
   });
   final String displayName;
+  final String? explorationPhase;
+  final int? explorationElapsedSeconds;
+  final bool progressUnavailable;
   final int? initialDiscovery;
   final List<PlazaDiscovery> discoveries;
   final VoidCallback? onDiscovery;
@@ -213,6 +220,65 @@ class _PlazaPageState extends State<PlazaPage> {
                     behavior: HitTestBehavior.opaque,
                     onTap: _showDiscovery,
                     child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+              if (widget.explorationPhase != null)
+                Positioned(
+                  right: (constraints.maxWidth - width) / 2 + 16,
+                  bottom: math.max(
+                    math.max(safe.bottom, 34) + 90,
+                    constraints.maxHeight - 316 * scale,
+                  ),
+                  width: math.min(210, width - 32),
+                  child: PlazaProgressBubble(
+                    phase: widget.explorationPhase!,
+                    elapsedSeconds: widget.explorationElapsedSeconds,
+                    unavailable: widget.progressUnavailable,
+                    onOpenDiscovery: _showDiscovery,
+                  ),
+                ),
+              Positioned(
+                left: (constraints.maxWidth - width) / 2 + 16,
+                bottom: math.max(safe.bottom, 34) + 6,
+                child: Semantics(
+                  button: true,
+                  label: '回首页',
+                  child: GestureDetector(
+                    key: const ValueKey('plaza-home-button'),
+                    onTap: () => Navigator.maybePop(context),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      width: math.max(
+                        89,
+                        MediaQuery.textScalerOf(context).scale(14) * 3 + 31,
+                      ),
+                      height: math.max(
+                        44,
+                        MediaQuery.textScalerOf(context).scale(23) + 18,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0x26FFFFFF),
+                        borderRadius: BorderRadius.circular(188),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SvgPicture.asset(
+                            'assets/design/plaza_home_back.svg',
+                            excludeFromSemantics: true,
+                          ),
+                          const Text(
+                            '回首页',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              height: 23 / 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),

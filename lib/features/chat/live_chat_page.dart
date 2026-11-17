@@ -130,6 +130,7 @@ class _LiveChatPageState extends State<LiveChatPage>
   Widget build(BuildContext context) => ChatPage(
     returningUser: widget.returningUser,
     messages: _chat?.messages ?? const [],
+    visibleDiscoveryCards: _chat?.visibleDiscoveryCards,
     busy:
         widget.busy || (_chat?.sending ?? false) || (_chat?.locating ?? false),
     error: widget.error ?? _error ?? _chat?.error,

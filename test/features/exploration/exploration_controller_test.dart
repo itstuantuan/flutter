@@ -10,6 +10,84 @@ import 'fakes.dart';
 Future<void> flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test(
+    'a completion push cannot be overwritten by a late searching response',
+    () async {
+      final service = FakeBotService()..progressGate = Completer<void>();
+      final controller = ExplorationController(
+        service: service,
+        store: MemoryExplorationStore(),
+        displayName: '测试',
+      );
+      await controller.chat.initializeSession();
+      controller.watchPlaza('task-1');
+      await flush();
+      controller.receiveCompletion(completionEvent());
+      expect(controller.progress['phase'], 'complete');
+      service.progressGate!.complete();
+      await flush();
+      await flush();
+      expect(controller.progress['phase'], 'complete');
+      expect(controller.progressUnavailable, isFalse);
+      controller.dispose();
+      await service.events.close();
+    },
+  );
+  test(
+    'switching watched tasks ignores stale progress and starts new polling',
+    () async {
+      final gate = Completer<void>();
+      final service = FakeBotService()..progressGate = gate;
+      final controller = ExplorationController(
+        service: service,
+        store: MemoryExplorationStore(),
+        displayName: '测试',
+      );
+      controller.watchPlaza('old-task');
+      await flush();
+      controller.watchPlaza('new-task');
+      service.progressGate = null;
+      service.progress = {'phase': 'searching', 'taskId': 'new-task'};
+      gate.complete();
+      await flush();
+      await flush();
+      expect(controller.progress['taskId'], 'new-task');
+      controller.dispose();
+      await service.events.close();
+    },
+  );
+
+  test('home updates share the same three-card selection with chat', () async {
+    final service = FakeBotService();
+    final store = MemoryExplorationStore();
+    final controller = ExplorationController(
+      service: service,
+      store: store,
+      displayName: '测试',
+    )..pause();
+    await controller.initialize();
+    for (final task in ['old', 'new']) {
+      controller.acceptHome({
+        'cards': [
+          for (var i = 0; i < 5; i++)
+            {'taskId': task, 'materialId': '$task-$i', 'title': '发现$i'},
+        ],
+      });
+      expect(controller.cards, hasLength(3));
+      expect(controller.chat.visibleDiscoveryCards, controller.cards);
+      expect(
+        controller.chat.visibleDiscoveryCards!.every(
+          (card) => card['taskId'] == task,
+        ),
+        isTrue,
+      );
+    }
+    await flush();
+    expect(store.value['cards'], controller.cards);
+    controller.dispose();
+    await service.events.close();
+  });
+
   test('cached cards restore offline, refresh, and survive restart', () async {
     final service = FakeBotService();
     final store = MemoryExplorationStore()

@@ -26,12 +26,14 @@ class FakeBotService extends ChatService {
   final events = StreamController<SseEvent>.broadcast();
   bool confirmed = false, timeoutStart = false, failAck = false;
   int starts = 0;
-  Completer<void>? homeGate;
+  bool failProgress = false;
+  Completer<void>? homeGate, progressGate;
   String? activeTask;
   List<String> selectedInterests = ['music'];
   List<Map<String, dynamic>> homeCards = [];
   List<Map<String, dynamic>> historyItems = [];
   List<Map<String, dynamic>> completions = [];
+  Map<String, dynamic> square = {'elapsedSeconds': 12};
   Map<String, dynamic> progress = {'phase': 'searching', 'cards': []};
   Map<String, dynamic> located = {
     'anchorTurnId': 42,
@@ -83,7 +85,13 @@ class FakeBotService extends ChatService {
     if (path == '/explorations') {
       return {'items': historyItems, 'hasMore': false};
     }
-    if (path.endsWith('/progress')) return progress;
+    if (path.endsWith('/progress')) {
+      final snapshot = progress;
+      await progressGate?.future;
+      if (failProgress) throw const ChatException('进度连接失败');
+      return snapshot;
+    }
+    if (path.endsWith('/square')) return square;
     if (path.contains('/locate/')) return located;
     if (path.endsWith('/explorations') && method == 'POST') {
       starts++;

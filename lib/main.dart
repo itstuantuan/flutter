@@ -32,9 +32,7 @@ class MainApp extends StatelessWidget {
       home: const SplashPage(),
       routes: {
         '/name-preview': (_) => NamePage(onContinue: (_) async {}),
-        '/interests-preview': (_) => InterestsPage(
-          onStart: (_) async => true,
-        ),
+        '/interests-preview': (_) => InterestsPage(onStart: (_) async => true),
         '/plaza-preview': (_) => const PlazaPage(),
         '/login-preview': (_) => PhoneLoginPage(
           service: account,
@@ -50,6 +48,8 @@ class MainApp extends StatelessWidget {
         ),
         '/chat-returning-preview': (_) =>
             const ChatPreviewPage(state: ChatPreviewState.returning),
+        '/chat-discovery-preview': (_) =>
+            const ChatPreviewPage(state: ChatPreviewState.discovery),
         '/chat-preview': (_) => const ChatPreviewPage(),
         '/chat-conversation-preview': (_) =>
             const ChatPreviewPage(state: ChatPreviewState.conversation),

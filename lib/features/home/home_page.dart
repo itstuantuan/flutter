@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../shared/design_scene.dart';
+import '../chat/chat_artwork.dart';
 import 'home_chat_hint.dart';
 import 'home_interactions.dart';
 
@@ -62,6 +63,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _hintDismissed = false;
+  double _exploreOffsetY = 0;
   void _act(VoidCallback action) {
     setState(() => _hintDismissed = true);
     action();
@@ -332,54 +334,37 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               Positioned(
+                left: safe.left,
+                top: ((constraints.maxHeight - 48) / 2 + _exploreOffsetY).clamp(
+                  safe.top + 3,
+                  math.max(
+                    safe.top + 3,
+                    constraints.maxHeight - footerBottom - 56,
+                  ),
+                ),
+                child: ChatExploreBanner(
+                  key: const ValueKey('home-explore-banner'),
+                  onPressed: () => _act(widget.onExplore),
+                  onDragUpdate: (delta) => setState(() {
+                    _exploreOffsetY = (_exploreOffsetY + delta.dy).clamp(
+                      safe.top + 3 - (constraints.maxHeight - 48) / 2,
+                      math.max(
+                            safe.top + 3,
+                            constraints.maxHeight - footerBottom - 56,
+                          ) -
+                          (constraints.maxHeight - 48) / 2,
+                    );
+                  }),
+                ),
+              ),
+              Positioned(
                 left: safe.left + 16,
                 right: safe.right + 16,
                 bottom: footerBottom,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Transform.translate(
-                      offset: const Offset(-16, 0),
-                      child: Tooltip(
-                        message: '逛一逛',
-                        child: Semantics(
-                          button: true,
-                          label: '逛一逛',
-                          child: HomePressFeedback(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _act(widget.onExplore),
-                              child: SizedBox(
-                                width: 130,
-                                height: 45,
-                                child: Center(
-                                  child: ClipRect(
-                                    child: SizedBox(
-                                      width: 130,
-                                      height: 40,
-                                      child: Stack(
-                                        children: [
-                                          Positioned(
-                                            left: -107,
-                                            top: 0,
-                                            child: SvgPicture.asset(
-                                              'assets/home/explore.svg',
-                                              width: 237,
-                                              height: 40,
-                                              excludeFromSemantics: true,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    const Spacer(),
                     _GlassPill(
                       width: 116,
                       height: 45,

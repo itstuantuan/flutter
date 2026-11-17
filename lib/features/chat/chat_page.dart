@@ -6,9 +6,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'chat_artwork.dart';
+import 'chat_discovery_carousel.dart';
 
 import 'chat_message.dart';
 import 'chat_time.dart';
+import 'chat_transcript.dart';
 import 'chat_typewriter.dart';
 import 'voice_capture.dart';
 import 'system_dictation.dart';
@@ -23,6 +25,7 @@ class ChatPage extends StatefulWidget {
     required this.onExit,
     required this.onExplore,
     this.messages = const [],
+    this.visibleDiscoveryCards,
     this.onSend,
     this.onVoiceRecorded,
     this.voiceCapture,
@@ -54,6 +57,7 @@ class ChatPage extends StatefulWidget {
   final ValueChanged<String>? onDiscoveryVisible;
   final VoidCallback onExit, onExplore;
   final List<ChatMessage> messages;
+  final List<Map<String, dynamic>>? visibleDiscoveryCards;
   final Future<bool> Function(String text)? onSend;
   final Future<bool> Function(VoiceClip clip)? onVoiceRecorded;
   final bool useSystemDictation;
@@ -86,8 +90,7 @@ class _ChatPageState extends State<ChatPage>
   bool _sending = false;
   final _turnKeys = <int, GlobalKey>{};
   final _textKeys = <int, GlobalKey>{};
-  final _materialKeys = <String, GlobalKey>{};
-  String _materialKey(int? turn, Object? material) => '$turn:$material';
+  final _discoveryKeys = <int, GlobalKey<ChatDiscoveryCarouselState>>{};
   Timer? _highlightTimer;
   Offset _exploreBannerOffset = Offset.zero;
   bool _exploreBannerCollapsed = false;
@@ -97,6 +100,8 @@ class _ChatPageState extends State<ChatPage>
   );
   final _typingTurns = <int>{};
   int _anchorRequest = 0;
+  bool _locatingAnchor = false;
+  bool _anchorPending = false;
   final _reportedTasks = <String>{};
   int? _highlightedTurn;
   Future<bool>? _voiceSave;
@@ -112,6 +117,19 @@ class _ChatPageState extends State<ChatPage>
     ...widget.onSend == null ? _localMessages : widget.messages,
     ..._ephemeralMessages,
   ];
+  List<ChatTranscriptEntry> get _entries => chatTranscriptEntries(
+    _messages,
+    visibleCards: widget.visibleDiscoveryCards,
+  );
+
+  int? _renderedTurnId(int? turnId) =>
+      _entries
+          .where((entry) => entry.containsTurn(turnId))
+          .firstOrNull
+          ?.message
+          .turnId ??
+      turnId;
+
   bool get _busy =>
       _dictationSendPending ||
       widget.busy ||
@@ -208,9 +226,19 @@ class _ChatPageState extends State<ChatPage>
     _scheduleVisible();
     if (oldWidget.locationRevision != widget.locationRevision ||
         oldWidget.anchorTurnId != widget.anchorTurnId ||
-        oldWidget.anchorMaterialId != widget.anchorMaterialId) {
-      if (widget.anchorTurnId != null) _scrollToAnchor();
-    } else if (_highlightedTurn == null &&
+        oldWidget.anchorMaterialId != widget.anchorMaterialId ||
+        _anchorPending) {
+      if (widget.anchorTurnId != null) {
+        _scrollToAnchor();
+      } else {
+        ++_anchorRequest;
+        _highlightTimer?.cancel();
+        _focusPulse.stop();
+        _highlightedTurn = null;
+        _locatingAnchor = _anchorPending = false;
+      }
+    } else if (!_locatingAnchor &&
+        _highlightedTurn == null &&
         (!_scroll.hasClients || _scroll.offset < 80) &&
         (oldWidget.messages.length != widget.messages.length ||
             oldWidget.messages.lastOrNull?.text !=
@@ -491,7 +519,8 @@ class _ChatPageState extends State<ChatPage>
   );
 
   Widget _transcript({double bottomPadding = 0}) {
-    final messages = _messages;
+    final entries = _entries;
+    final messages = entries.map((entry) => entry.message).toList();
     DateTime? previous;
     final timestamps = <int, String>{};
     for (var i = 0; i < messages.length; i++) {
@@ -539,10 +568,10 @@ class _ChatPageState extends State<ChatPage>
           for (var i = 0; i < messages.length; i++) ...[
             SizedBox(height: i == 0 ? 24 : 16),
             if (timestamps[i] != null) _timestamp(timestamps[i]!),
-            if (_messages[i].voice case final clip?)
+            if (messages[i].voice case final clip?)
               _voiceBubble(clip)
             else
-              _messageBubble(_messages[i]),
+              _messageBubble(entries[i]),
           ],
         ],
       ),
@@ -554,7 +583,13 @@ class _ChatPageState extends State<ChatPage>
             shaderCallback: (bounds) => LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: const [Colors.transparent, Colors.white, Colors.white],
+              colors: [
+                _locatingAnchor || _highlightedTurn != null
+                    ? Colors.white
+                    : Colors.transparent,
+                Colors.white,
+                Colors.white,
+              ],
               stops: [0, (161 / bounds.height).clamp(0, 1), 1],
             ).createShader(bounds),
             child: transcript,
@@ -629,6 +664,7 @@ class _ChatPageState extends State<ChatPage>
 
   void _scheduleVisible() => WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!mounted ||
+        _locatingAnchor ||
         !_scroll.hasClients ||
         widget.onDiscoveryVisible == null ||
         ModalRoute.of(context)?.isCurrent == false) {
@@ -638,6 +674,11 @@ class _ChatPageState extends State<ChatPage>
         ?.findRenderObject();
     if (viewport is! RenderBox || !viewport.hasSize) return;
     final bounds = viewport.localToGlobal(Offset.zero) & viewport.size;
+    final renderedTurns = {
+      for (final entry in _entries)
+        for (final message in entry.messages)
+          if (message.turnId != null) message.turnId: entry.message.turnId,
+    };
     for (final message in widget.messages) {
       final task = message.referenceTaskId;
       if (task == null ||
@@ -645,7 +686,13 @@ class _ChatPageState extends State<ChatPage>
           _reportedTasks.contains(task)) {
         continue;
       }
-      final box = _turnKeys[message.turnId]?.currentContext?.findRenderObject();
+      final renderedId = renderedTurns[message.turnId] ?? message.turnId;
+      final carousel = _discoveryKeys[renderedId]?.currentState;
+      if (carousel != null &&
+          carousel.selectedCard?['_chatTurnId'] != message.turnId) {
+        continue;
+      }
+      final box = _turnKeys[renderedId]?.currentContext?.findRenderObject();
       if (box is RenderBox &&
           box.hasSize &&
           bounds.overlaps(box.localToGlobal(Offset.zero) & box.size)) {
@@ -656,20 +703,41 @@ class _ChatPageState extends State<ChatPage>
   });
 
   void _scrollToAnchor() {
+    _focus.unfocus();
     _highlightTimer?.cancel();
     _focusPulse.stop();
     _focusPulse.value = 0;
     final request = ++_anchorRequest;
-    _highlightedTurn = widget.anchorTurnId;
+    _highlightedTurn = null;
+    _locatingAnchor = true;
+    _anchorPending = false;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || request != _anchorRequest) return;
       final id = widget.anchorTurnId;
-      final target =
-          _materialKeys[_materialKey(id, widget.anchorMaterialId)]
-              ?.currentContext ??
-          _turnKeys[id]?.currentContext;
-      if (target == null) return;
-      final duration = MediaQuery.disableAnimationsOf(context)
+      final renderedId = _renderedTurnId(id);
+      final carousel = _discoveryKeys[renderedId]?.currentState;
+      if (carousel != null) {
+        final cards = widget.messages
+            .where((m) => m.turnId == id)
+            .firstOrNull
+            ?.cards;
+        if (widget.anchorMaterialId != null &&
+            cards?.any(
+                  (card) => card['materialId'] == widget.anchorMaterialId,
+                ) !=
+                true) {
+          _anchorPending = true;
+          return;
+        }
+      }
+      if (!mounted || request != _anchorRequest) return;
+      final target = _turnKeys[renderedId]?.currentContext;
+      if (target == null || !target.mounted || !_scroll.hasClients) {
+        _anchorPending = true;
+        return;
+      }
+      final duration =
+          !widget.animate || MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
           : const Duration(milliseconds: 550);
       final message = widget.messages.where((m) => m.turnId == id).firstOrNull;
@@ -709,13 +777,34 @@ class _ChatPageState extends State<ChatPage>
         );
       }
       if (!mounted || request != _anchorRequest) return;
+      // Bring the row on screen first, then visibly slide to the chosen card.
+      final visibleCarousel = _discoveryKeys[renderedId]?.currentState;
+      if (visibleCarousel != null) {
+        final selected = await visibleCarousel.revealMaterial(
+          widget.anchorMaterialId,
+          turnId: id,
+        );
+        if (!mounted || request != _anchorRequest) return;
+        if (!selected) {
+          _locatingAnchor = false;
+          return;
+        }
+      }
+      setState(() {
+        _locatingAnchor = false;
+        _highlightedTurn = id;
+      });
+      _scheduleVisible();
       if (!MediaQuery.disableAnimationsOf(context) && widget.animate) {
         _focusPulse.forward(from: 0);
       }
       widget.onAnchorVisible?.call();
+      if (!mounted || request != _anchorRequest) return;
       _highlightTimer?.cancel();
       _highlightTimer = Timer(const Duration(seconds: 5), () {
-        if (mounted) setState(() => _highlightedTurn = null);
+        if (mounted && request == _anchorRequest) {
+          setState(() => _highlightedTurn = null);
+        }
       });
     });
   }
@@ -728,44 +817,26 @@ class _ChatPageState extends State<ChatPage>
     return title is String && title.isNotEmpty ? title : null;
   }
 
-  Widget _messageBubble(ChatMessage message) {
-    final highlighted =
-        message.turnId != null && message.turnId == _highlightedTurn;
+  Widget _messageBubble(ChatTranscriptEntry entry) {
+    final message = entry.message;
+    final highlighted = entry.containsTurn(_highlightedTurn);
     final textKey = message.turnId == null
         ? null
         : _textKeys.putIfAbsent(message.turnId!, GlobalKey.new);
     final bubble = message.hasStructuredDiscoveries
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final (index, card) in message.cards.indexed) ...[
-                if (index > 0) const SizedBox(height: 12),
-                KeyedSubtree(
-                  key: _materialKeys.putIfAbsent(
-                    _materialKey(message.turnId, card['materialId'] ?? index),
-                    GlobalKey.new,
+        ? ChatDiscoveryCarousel(
+            key: message.turnId == null
+                ? null
+                : _discoveryKeys.putIfAbsent(
+                    message.turnId!,
+                    GlobalKey<ChatDiscoveryCarouselState>.new,
                   ),
-                  child: ChatBubble(
-                    isUser: false,
-                    text: [
-                      if ((card['title'] as String? ?? '').trim().isNotEmpty)
-                        card['title'] as String,
-                      if ((card['content'] as String? ?? '').trim().isNotEmpty)
-                        card['content'] as String
-                      else if ((card['summary'] as String? ?? '')
-                          .trim()
-                          .isNotEmpty)
-                        card['summary'] as String,
-                    ].join('\n\n'),
-                    highlightText:
-                        highlighted &&
-                            card['materialId'] == widget.anchorMaterialId
-                        ? card['title'] as String?
-                        : null,
-                  ),
-                ),
-              ],
-            ],
+            cards: entry.cards,
+            onPageChanged: _scheduleVisible,
+            highlightedTurnId: highlighted ? _highlightedTurn : null,
+            animate: widget.animate,
+            focusAnimation: _focusPulse,
+            highlightedMaterialId: highlighted ? widget.anchorMaterialId : null,
           )
         : message.isUser
         ? ChatBubble(text: message.text, isUser: true)
@@ -864,7 +935,7 @@ class _ChatPageState extends State<ChatPage>
                         color: Colors.white,
                       ),
                       decoration: const InputDecoration(
-                        hintText: 'Talk to the Oracle...',
+                        hintText: '输入你想说的话…',
                         hintStyle: TextStyle(
                           inherit: false,
                           textBaseline: TextBaseline.alphabetic,
@@ -1051,22 +1122,22 @@ class _ChatPageState extends State<ChatPage>
                       ? media.viewInsets.bottom + 8
                       : math.max(media.padding.bottom, 34.0) + 8;
                   final footerTop = constraints.maxHeight - footerBottom - 49;
-                  final bannerTop = footerTop - 68;
+                  final bannerTop = headerTop + 52;
                   final showBanner =
-                      !widget.returningUser && bannerTop > headerTop + 124;
-                  final messageTop = headerTop + (showBanner ? 86 : 52);
+                      !widget.returningUser && footerTop - 68 > headerTop + 124;
+                  final messageTop = headerTop + (showBanner ? 108 : 52);
                   // The floating explore button is an overlay, not the list
                   // boundary. Messages remain visible beside and below it,
                   // all the way down to the composer.
                   final messageBottom = math.max(messageTop + 1, footerTop - 9);
                   final welcomeGap = math.min(
                     68.0,
-                    math.max(8.0, (bannerTop + 4 - messageTop) * 0.25),
+                    math.max(8.0, (footerTop - 64 - messageTop) * 0.25),
                   );
                   final welcomePadding = _messages.isEmpty && showBanner
                       ? math.max(
                           0.0,
-                          messageBottom - (bannerTop + 4 - welcomeGap),
+                          messageBottom - (footerTop - 64 - welcomeGap),
                         )
                       : 0.0;
                   final error = widget.error ?? _error ?? _voice.error;
@@ -1094,14 +1165,7 @@ class _ChatPageState extends State<ChatPage>
                       ),
                       if (showBanner)
                         Positioned(
-                          left: _exploreBannerOffset.dx.clamp(
-                            0.0,
-                            math.max(
-                              0.0,
-                              constraints.maxWidth -
-                                  (_exploreBannerCollapsed ? 68 : 188),
-                            ),
-                          ),
+                          left: 0,
                           top: (bannerTop + _exploreBannerOffset.dy).clamp(
                             headerTop + 52,
                             math.max(headerTop + 52, footerTop - 49),
@@ -1113,10 +1177,7 @@ class _ChatPageState extends State<ChatPage>
                             onDragUpdate: (delta) => setState(() {
                               final next = _exploreBannerOffset + delta;
                               _exploreBannerOffset = Offset(
-                                next.dx.clamp(
-                                  0.0,
-                                  math.max(0.0, constraints.maxWidth - 68),
-                                ),
+                                0,
                                 next.dy.clamp(
                                   headerTop + 52 - bannerTop,
                                   math.max(headerTop + 52, footerTop - 49) -
