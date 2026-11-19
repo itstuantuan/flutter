@@ -203,64 +203,6 @@ class _ChatExploreBannerState extends State<ChatExploreBanner> {
     super.dispose();
   }
 
-  Widget _compact() => SizedBox(
-    width: 68,
-    height: 49,
-    child: Stack(
-      children: [
-        Positioned(
-          left: 0,
-          top: 6,
-          width: 68,
-          height: 43,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(21.5),
-            child: Image.asset(
-              'assets/chat/explore_compact_background.png',
-              fit: BoxFit.fill,
-            ),
-          ),
-        ),
-        Positioned(
-          left: 45,
-          top: 22,
-          child: chatSvg('banner_chevrons', width: 11, height: 10.987),
-        ),
-        Positioned(
-          left: 0,
-          top: -1,
-          width: 41.088,
-          height: 42.053,
-          child: Transform.rotate(
-            angle: 3.78 * math.pi / 180,
-            child: Center(
-              child: SizedBox(
-                width: 38.561,
-                height: 39.596,
-                child: ClipRect(
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        left: -38.561 * .2013,
-                        top: -39.596 * .1634,
-                        width: 38.561 * 1.3423,
-                        height: 39.596 * 1.3072,
-                        child: Image.asset(
-                          'assets/chat/explore_magnifier.png',
-                          fit: BoxFit.fill,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
@@ -286,14 +228,9 @@ class _ChatExploreBannerState extends State<ChatExploreBanner> {
         onLongPressEnd: widget.onDragUpdate != null ? (_) => _schedule() : null,
         onLongPressCancel: widget.onDragUpdate != null ? _schedule : null,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedSize(
-          alignment: Alignment.centerLeft,
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 200),
-          curve: Curves.easeInOutCubic,
+        child: ExploreBannerSize(
           child: _collapsed
-              ? _compact()
+              ? const ExploreMagnifier()
               : SizedBox(
                   width: 188,
                   height: 48,
@@ -398,6 +335,85 @@ class _ChatExploreBannerState extends State<ChatExploreBanner> {
   );
 }
 
+class ExploreBannerSize extends StatelessWidget {
+  const ExploreBannerSize({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => MediaQuery.disableAnimationsOf(context)
+      ? child
+      : AnimatedSize(
+          alignment: Alignment.centerLeft,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOutCubic,
+          child: child,
+        );
+}
+
+class ExploreMagnifier extends StatelessWidget {
+  const ExploreMagnifier({super.key});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 68,
+    height: 49,
+    child: Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 6,
+          width: 68,
+          height: 43,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(21.5),
+            child: Image.asset(
+              'assets/chat/explore_compact_background.png',
+              fit: BoxFit.fill,
+            ),
+          ),
+        ),
+        Positioned(
+          left: 45,
+          top: 22,
+          child: chatSvg('banner_chevrons', width: 11, height: 10.987),
+        ),
+        Positioned(
+          left: 0,
+          top: -1,
+          width: 41.088,
+          height: 42.053,
+          child: Transform.rotate(
+            angle: 3.78 * math.pi / 180,
+            child: Center(
+              child: SizedBox(
+                width: 38.561,
+                height: 39.596,
+                child: ClipRect(
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: -38.561 * .2013,
+                        top: -39.596 * .1634,
+                        width: 38.561 * 1.3423,
+                        height: 39.596 * 1.3072,
+                        child: Image.asset(
+                          'assets/chat/explore_magnifier.png',
+                          fit: BoxFit.fill,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
     super.key,
@@ -419,8 +435,8 @@ class ChatBubble extends StatelessWidget {
         inherit: false,
         textBaseline: TextBaseline.alphabetic,
         fontFamily: 'PingFang SC',
-        fontSize: 14,
-        height: 18 / 14,
+        fontSize: 15,
+        height: 18 / 15,
         color: isUser ? const Color(0xFF333333) : Colors.white,
       );
       final measurement = TextPainter(
@@ -455,7 +471,7 @@ class ChatBubble extends StatelessWidget {
                 ),
               ),
               ConstrainedBox(
-                constraints: BoxConstraints(minHeight: isUser ? 38 : 78),
+                constraints: BoxConstraints(minHeight: isUser ? 38 : 0),
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: 12,

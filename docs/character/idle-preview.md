@@ -1,8 +1,7 @@
 # 角色待机预览
 
-入口：流程验证页右上角星光按钮，或网页路由 /character-preview。
+应用内预览路由已移除。
 
-启动：`flutter run -d chrome --route /character-preview`
 
 素材：`assets/characters/viitor_idle.png`，由内置 imagegen 从用户参考图提取并重绘为透明角色，非精确无损抠图。正式 UI 素材到位后替换此文件即可。
 

@@ -247,11 +247,11 @@ void main() {
               'messageType': 'discovery',
               'status': 'completed',
               'assistantText': '服务端推送$id',
-              'referenceTaskId': 'task-$id',
+              'referenceTaskId': 'task-batch',
               'exploration': {
                 'cards': [
                   {
-                    'materialId': 'same-material',
+                    'materialId': 'material-$id',
                     'title': '推送$id',
                     'summary': '第$id条推送摘要',
                   },
@@ -279,7 +279,7 @@ void main() {
             returningUser: true,
             messages: controller.messages,
             anchorTurnId: 2,
-            anchorMaterialId: 'same-material',
+            anchorMaterialId: 'material-2',
             onDiscoveryVisible: seen.add,
             onAnchorVisible: () => located++,
           ),
@@ -295,7 +295,7 @@ void main() {
       final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
       expect(pages.page, 1);
       expect(located, 1);
-      expect(seen, ['task-2']);
+      expect(seen, ['task-batch']);
       final selected = find.byWidgetPredicate(
         (w) => w is ChatDiscoveryCard && w.highlighted,
       );
@@ -305,7 +305,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('discovery-page-2')));
       await tester.pumpAndSettle();
       expect(pages.page, 2);
-      expect(seen, ['task-2', 'task-3']);
+      expect(seen, ['task-batch']);
       // Display grouping never rewrites the controller's server messages.
       expect(controller.messages.take(3).map((m) => m.turnId), [1, 2, 3]);
       expect(

@@ -24,6 +24,9 @@ void main() {
       final short = tester.getSize(box());
       expect(short.width, lessThan(94));
       expect(short.width, greaterThan(42));
+      expect(short.height, isUser ? 38 : 42);
+      await show('你好\n再见');
+      expect(tester.getSize(box()).height, isUser ? 56 : 60);
       await show('这是一条需要自动换行的长消息。' * 20);
       final long = tester.getSize(box());
       expect(long.width, 269);

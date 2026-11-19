@@ -14,20 +14,63 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
-  test('本地通知使用原生调度，不依赖 APNs token', () async {
-    final calls = <String>[];
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          calls.add(call.method);
-          return null;
-        });
-    final service = PushService(channel: channel);
-    expect(await service.scheduleDemo(), isTrue);
-    expect(calls, ['scheduleDemo']);
-    expect(service.token, isNull);
-    expect(service.busy, isFalse);
-    service.dispose();
-  });
+  test(
+    'drains cold-start notifications and deduplicates repeated IDs',
+    () async {
+      final messages = [
+        {
+          'event': 'exploration_completed',
+          'taskId': 'task-1',
+          'sessionId': 's',
+          'notificationId': 'n1',
+        },
+        {
+          'event': 'exploration_completed',
+          'taskId': 'task-1',
+          'sessionId': 's',
+          'notificationId': 'n1',
+        },
+        {
+          'event': 'exploration_completed',
+          'taskId': 'task-2',
+          'sessionId': 's',
+          'notificationId': 'n2',
+        },
+      ];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (_) async => messages.isEmpty ? null : messages.removeAt(0),
+          );
+      final service = PushService(channel: channel);
+      await service.readNotification();
+      expect(service.pendingNotification?['taskId'], 'task-1');
+      service.pendingNotification = null;
+      expect(service.pendingNotification?['taskId'], 'task-2');
+      service.pendingNotification = null;
+      expect(service.pendingNotification, isNull);
+      service.dispose();
+    },
+  );
+  test(
+    'reads production from native signing metadata independent of API host',
+    () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (_) async => {
+              'authorization': 'authorized',
+              'token': 'token',
+              'environment': 'production',
+            },
+          );
+      final service = PushService(channel: channel);
+      await service.refresh();
+      expect(service.environment, 'production');
+      expect(service.error, isNull);
+      service.dispose();
+    },
+  );
   test('拒绝不产生 token，授权不等于获取 token', () async {
     var status = 'denied';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

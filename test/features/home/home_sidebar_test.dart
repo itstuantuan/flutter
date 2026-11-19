@@ -41,9 +41,7 @@ void main() {
           await tester.ensureVisible(find.text('系统通知'));
           await tester.tap(find.text('系统通知'));
           expect(selected, 'notifications');
-          await tester.ensureVisible(find.text('调试工具'));
-          await tester.tap(find.text('调试工具'));
-          expect(selected, 'debug');
+          expect(find.text('调试工具'), findsNothing);
         }
       }
     },

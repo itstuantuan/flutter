@@ -25,7 +25,6 @@ class ChatPage extends StatefulWidget {
     required this.onExit,
     required this.onExplore,
     this.messages = const [],
-    this.visibleDiscoveryCards,
     this.onSend,
     this.onVoiceRecorded,
     this.voiceCapture,
@@ -39,6 +38,7 @@ class ChatPage extends StatefulWidget {
     this.startRecordingOnOpen = false,
     this.animate = true,
     this.busy = false,
+    this.lockComposer = false,
     this.error,
     this.timeLabel,
     this.returningUser = false,
@@ -48,6 +48,8 @@ class ChatPage extends StatefulWidget {
     this.locationRevision = 0,
     this.onAnchorVisible,
     this.onDiscoveryVisible,
+    this.onLoadOlderMessages,
+    this.loadingOlderMessages = false,
   });
   final bool returningUser, showWelcome;
   final int? anchorTurnId;
@@ -55,10 +57,11 @@ class ChatPage extends StatefulWidget {
   final int locationRevision;
   final VoidCallback? onAnchorVisible;
   final ValueChanged<String>? onDiscoveryVisible;
+  final VoidCallback? onLoadOlderMessages;
+  final bool loadingOlderMessages;
   final VoidCallback onExit, onExplore;
   final List<ChatMessage> messages;
-  final List<Map<String, dynamic>>? visibleDiscoveryCards;
-  final Future<bool> Function(String text)? onSend;
+  final FutureOr<bool> Function(String text)? onSend;
   final Future<bool> Function(VoiceClip clip)? onVoiceRecorded;
   final bool useSystemDictation;
   final SystemDictation? dictation;
@@ -66,6 +69,7 @@ class ChatPage extends StatefulWidget {
   final VoicePlayback? voicePlayback;
   final String name, exitLabel, initialDraft;
   final bool initialRecordingPreview, startRecordingOnOpen, animate, busy;
+  final bool lockComposer;
   final String? error, timeLabel;
 
   @override
@@ -87,7 +91,8 @@ class _ChatPageState extends State<ChatPage>
   VoicePlayback? _playback;
   StreamSubscription<void>? _playbackComplete;
   String? _playingPath;
-  bool _sending = false;
+  bool _sendingText = false;
+  bool _sendingRecording = false;
   final _turnKeys = <int, GlobalKey>{};
   final _textKeys = <int, GlobalKey>{};
   final _discoveryKeys = <int, GlobalKey<ChatDiscoveryCarouselState>>{};
@@ -117,10 +122,7 @@ class _ChatPageState extends State<ChatPage>
     ...widget.onSend == null ? _localMessages : widget.messages,
     ..._ephemeralMessages,
   ];
-  List<ChatTranscriptEntry> get _entries => chatTranscriptEntries(
-    _messages,
-    visibleCards: widget.visibleDiscoveryCards,
-  );
+  List<ChatTranscriptEntry> get _entries => chatTranscriptEntries(_messages);
 
   int? _renderedTurnId(int? turnId) =>
       _entries
@@ -132,8 +134,10 @@ class _ChatPageState extends State<ChatPage>
 
   bool get _busy =>
       _dictationSendPending ||
+      widget.lockComposer ||
       widget.busy ||
-      _sending ||
+      _sendingText ||
+      _sendingRecording ||
       _voice.busy ||
       (widget.useSystemDictation && _dictation.busy);
 
@@ -284,7 +288,7 @@ class _ChatPageState extends State<ChatPage>
     final clip = await _voice.finish();
     if (!mounted || clip == null) return;
     setState(() {
-      _sending = true;
+      _sendingRecording = true;
       _error = null;
     });
     try {
@@ -311,7 +315,7 @@ class _ChatPageState extends State<ChatPage>
     } finally {
       if (mounted) {
         setState(() {
-          _sending = false;
+          _sendingRecording = false;
           _voiceSave = null;
         });
       }
@@ -374,11 +378,12 @@ class _ChatPageState extends State<ChatPage>
     final text = _input.text.trim();
     if (_busy || _dictating || text.isEmpty) return;
     setState(() {
-      _sending = true;
+      _sendingText = true;
       _error = null;
     });
     try {
-      final sent = await widget.onSend?.call(text) ?? true;
+      final submission = widget.onSend?.call(text) ?? true;
+      final sent = submission is Future<bool> ? await submission : submission;
       if (!mounted) return;
       if (!sent) {
         setState(() => _error = widget.error == null ? '发送失败，请重试' : null);
@@ -400,7 +405,7 @@ class _ChatPageState extends State<ChatPage>
         setState(() => _error = widget.error == null ? '发送失败，请重试' : null);
       }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _sendingText = false);
     }
   }
 
@@ -458,7 +463,7 @@ class _ChatPageState extends State<ChatPage>
       if (widget.returningUser)
         IconButton(
           tooltip: '返回',
-          onPressed: _busy ? null : widget.onExit,
+          onPressed: _busy && !widget.lockComposer ? null : widget.onExit,
           icon: chatSvg('back', width: 24, height: 24),
         ),
       Container(
@@ -498,7 +503,7 @@ class _ChatPageState extends State<ChatPage>
       const Spacer(),
       if (!widget.returningUser)
         TextButton(
-          onPressed: _busy ? null : widget.onExit,
+          onPressed: _busy && !widget.lockComposer ? null : widget.onExit,
           style: TextButton.styleFrom(
             overlayColor: Colors.transparent,
             foregroundColor: const Color(0xD9FFFFFF),
@@ -521,6 +526,7 @@ class _ChatPageState extends State<ChatPage>
   Widget _transcript({double bottomPadding = 0}) {
     final entries = _entries;
     final messages = entries.map((entry) => entry.message).toList();
+    final thinkingGap = messages.lastOrNull?.isThinking == true ? 20.0 : 0.0;
     DateTime? previous;
     final timestamps = <int, String>{};
     for (var i = 0; i < messages.length; i++) {
@@ -535,10 +541,18 @@ class _ChatPageState extends State<ChatPage>
       physics: const ClampingScrollPhysics(),
       controller: _scroll,
       reverse: true,
-      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding + thinkingGap),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.onLoadOlderMessages != null)
+            TextButton(
+              onPressed: widget.loadingOlderMessages
+                  ? null
+                  : widget.onLoadOlderMessages,
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              child: Text(widget.loadingOlderMessages ? '加载中…' : '加载更早消息'),
+            ),
           if (widget.timeLabel != null) _timestamp(widget.timeLabel!),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -578,21 +592,34 @@ class _ChatPageState extends State<ChatPage>
     );
     return _messages.length < 3
         ? transcript
-        : ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (bounds) => LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                _locatingAnchor || _highlightedTurn != null
-                    ? Colors.white
-                    : Colors.transparent,
-                Colors.white,
-                Colors.white,
-              ],
-              stops: [0, (161 / bounds.height).clamp(0, 1), 1],
-            ).createShader(bounds),
+        : ListenableBuilder(
+            listenable: _scroll,
             child: transcript,
+            builder: (_, child) {
+              final showingHistoryAction =
+                  widget.onLoadOlderMessages != null &&
+                  _scroll.hasClients &&
+                  _scroll.position.hasContentDimensions &&
+                  _scroll.position.extentAfter < 48;
+              return ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (bounds) => LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    _locatingAnchor ||
+                            _highlightedTurn != null ||
+                            showingHistoryAction
+                        ? Colors.white
+                        : Colors.transparent,
+                    Colors.white,
+                    Colors.white,
+                  ],
+                  stops: [0, (161 / bounds.height).clamp(0, 1), 1],
+                ).createShader(bounds),
+                child: child,
+              );
+            },
           );
   }
 
@@ -840,6 +867,42 @@ class _ChatPageState extends State<ChatPage>
           )
         : message.isUser
         ? ChatBubble(text: message.text, isUser: true)
+        : message.isThinking
+        ? Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Semantics(
+              liveRegion: true,
+              child: const ChatGlass(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Color(0xFFD6CBFF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: SizedBox.square(dimension: 6),
+                      ),
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '正在思考…',
+                          style: TextStyle(
+                            fontFamily: 'PingFang SC',
+                            fontSize: 13,
+                            height: 1.4,
+                            color: Color(0xE6FFFFFF),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          )
         : ChatTypewriter(
             text: message.text,
             animate:
@@ -850,9 +913,12 @@ class _ChatPageState extends State<ChatPage>
             highlightText: highlighted ? _anchorTitle(message) : null,
           );
     return KeyedSubtree(
-      key: message.turnId == null
-          ? null
-          : _turnKeys.putIfAbsent(message.turnId!, GlobalKey.new),
+      key: switch (message) {
+        ChatMessage(:final turnId?) =>
+          _turnKeys.putIfAbsent(turnId, GlobalKey.new),
+        ChatMessage(:final clientMessageId?) => ValueKey(clientMessageId),
+        _ => null,
+      },
       child: bubble,
     );
   }
@@ -916,6 +982,8 @@ class _ChatPageState extends State<ChatPage>
                     child: TextField(
                       controller: _input,
                       focusNode: _focus,
+                      readOnly: widget.lockComposer,
+                      canRequestFocus: !widget.lockComposer,
                       inputFormatters: [
                         TextInputFormatter.withFunction(
                           (oldValue, newValue) => _busy ? oldValue : newValue,
@@ -955,7 +1023,9 @@ class _ChatPageState extends State<ChatPage>
                   SizedBox(
                     width: 48,
                     height: 48,
-                    child: _busy
+                    child: widget.lockComposer || _sendingText
+                        ? null
+                        : _busy
                         ? const Center(
                             child: SizedBox(
                               width: 22,
@@ -1074,7 +1144,7 @@ class _ChatPageState extends State<ChatPage>
               onPressed: _busy
                   ? null
                   : (_dictating ? _finishDictation : _saveRecording),
-              icon: _sending || _dictationSendPending
+              icon: _sendingRecording || _dictationSendPending
                   ? const SizedBox(
                       width: 22,
                       height: 22,
@@ -1098,7 +1168,7 @@ class _ChatPageState extends State<ChatPage>
       systemNavigationBarColor: Colors.black,
     ),
     child: PopScope(
-      canPop: !_busy,
+      canPop: !_busy || widget.lockComposer,
       child: Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
@@ -1118,9 +1188,9 @@ class _ChatPageState extends State<ChatPage>
                         constraints.maxHeight >= 600 ? 44.0 : 0.0,
                       ) +
                       9;
-                  final footerBottom = media.viewInsets.bottom > 0
-                      ? media.viewInsets.bottom + 8
-                      : math.max(media.padding.bottom, 34.0) + 8;
+                  final bottomSafeArea = math.max(media.viewPadding.bottom, 34.0);
+                  final footerBottom =
+                      math.max(media.viewInsets.bottom, bottomSafeArea) + 8;
                   final footerTop = constraints.maxHeight - footerBottom - 49;
                   final bannerTop = headerTop + 52;
                   final showBanner =

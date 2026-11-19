@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:bots/features/settings/feedback_page.dart';
 import 'package:bots/features/settings/profile_page.dart';
 import 'package:bots/features/settings/settings_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -42,6 +45,16 @@ void main() {
           ),
         ),
       );
+      Finder trailingIcon(String label) => find.descendant(
+        of: find
+            .ancestor(of: find.text(label), matching: find.byType(Row))
+            .first,
+        matching: find.byType(SvgPicture),
+      );
+      expect(
+        tester.getRect(trailingIcon('ViiTor UID')).right,
+        tester.getRect(trailingIcon('昵称')).right,
+      );
       await tester.tap(find.text('昵称'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '新名字');
@@ -62,6 +75,64 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('拍照'), findsNothing);
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'logout keeps confirmation and the separate account action is direct',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final completion = Completer<void>();
+      var logoutCalls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProfilePage(
+            name: '名字',
+            uid: '818949',
+            onSave: (_) async {},
+            onLogout: () {
+              logoutCalls++;
+              return completion.future;
+            },
+          ),
+        ),
+      );
+      final logout = find.widgetWithText(TextButton, '退出登录');
+      final accountAction = find.widgetWithText(TextButton, '注销账号');
+      expect(
+        tester.getCenter(accountAction).dy,
+        greaterThan(tester.getCenter(logout).dy),
+      );
+      await tester.tap(logout);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(logoutCalls, 0);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(accountAction);
+      await tester.tap(accountAction);
+      expect(logoutCalls, 1);
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.widget<TextButton>(accountAction).onPressed, isNull);
+
+      completion.complete();
+      await tester.pumpAndSettle();
+      await tester.tap(logout);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(AlertDialog),
+              matching: find.text('退出登录'),
+            )
+            .last,
+      );
+      await tester.pumpAndSettle();
+      expect(logoutCalls, 2);
     },
   );
   testWidgets('name validation and save errors keep editable page', (
@@ -168,7 +239,14 @@ void main() {
         await tester.pumpAndSettle();
         final button = find.text(page is ProfilePage ? '退出登录' : '提交反馈');
         await tester.ensureVisible(button);
+        await tester.pump();
         expect(button.hitTestable(), findsOneWidget);
+        if (page is ProfilePage) {
+          final accountAction = find.text('注销账号');
+          await tester.ensureVisible(accountAction);
+          await tester.pump();
+          expect(accountAction.hitTestable(), findsOneWidget);
+        }
 
         await tester.pumpWidget(const SizedBox());
       }

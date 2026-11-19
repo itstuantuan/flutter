@@ -31,6 +31,8 @@ class ChatMessage {
     this.cards = const [],
     this.createdAt,
     this.animateReply = false,
+    this.isThinking = false,
+    this.clientMessageId,
   });
   final String text;
   final bool isUser;
@@ -49,6 +51,8 @@ class ChatMessage {
       );
   final DateTime? createdAt;
   final bool animateReply;
+  final bool isThinking;
+  final String? clientMessageId;
 
   factory ChatMessage.fromStored(String value) {
     final separator = value.indexOf('：');

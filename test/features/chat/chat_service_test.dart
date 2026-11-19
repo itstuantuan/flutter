@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:bots/core/network/api_client.dart';
 import 'package:bots/features/chat/chat_controller.dart';
 import 'package:bots/features/chat/chat_service.dart';
+import 'package:bots/features/chat/chat_transcript.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -87,6 +88,168 @@ void main() {
       await decodeSse(Stream.value(utf8.encode('data: incomplete'))).toList(),
       isEmpty,
     );
+  });
+
+  test('older conversation pages merge historical discovery results', () async {
+    final stream = StreamController<Uint8List>();
+    final streamOpened = Completer<void>();
+    final dio = Dio()
+      ..httpClientAdapter = Adapter((options) async {
+        if (options.path.endsWith('/me')) {
+          return jsonResponse({'initialized': true, 'sessionId': 's1'});
+        }
+        if (options.path.endsWith('/home')) return jsonResponse({});
+        if (options.path.endsWith('/stream')) {
+          streamOpened.complete();
+          return ResponseBody(
+            stream.stream,
+            200,
+            headers: {'content-type': ['text/event-stream']},
+          );
+        }
+        final before = options.queryParameters['before'];
+        if (before == null) {
+          return jsonResponse({'turns': [turn(51, '最新回复')], 'hasMore': true});
+        }
+        expect(before, 51);
+        return jsonResponse({
+          'turns': [
+            {
+              ...turn(2, '较早的探索推送'),
+              'messageType': 'discovery',
+              'referenceTaskId': 'old-task',
+              'exploration': {
+                'cards': [
+                  for (var i = 1; i <= 3; i++)
+                    {'materialId': 'old-material-$i', 'summary': '历史发现$i'},
+                ],
+              },
+            },
+          ],
+          'hasMore': false,
+        });
+      });
+    final controller = ChatController(
+      ChatService(
+        client: ApiClient(baseUrl: 'https://test', dio: dio),
+        headers: () async => {},
+      ),
+      displayName: '测试',
+    );
+    final running = controller.start();
+    await streamOpened.future;
+    expect(controller.hasOlderMessages, isTrue);
+    await controller.loadOlderMessages();
+    expect(controller.hasOlderMessages, isFalse);
+    expect(controller.messages.first.cards.first['summary'], '历史发现1');
+    expect(controller.messages.last.text, '最新回复');
+    controller.pause();
+    await stream.close();
+    await running;
+    controller.dispose();
+  });
+
+  test('split discovery waits for all cards and returns to its old place', () async {
+    final progress = Completer<ResponseBody>();
+    final dio = Dio()
+      ..httpClientAdapter = Adapter((options) {
+        expect(options.path, '/api/v1/chat/explorations/old-task/progress');
+        return progress.future;
+      });
+    final controller = ChatController(
+      ChatService(
+        client: ApiClient(baseUrl: 'https://test', dio: dio),
+        headers: () async => {},
+      ),
+      displayName: '测试',
+    );
+    addTearDown(controller.dispose);
+    Map<String, dynamic> cardTurn(int card) => {
+      'id': 20 + card,
+      'createTime': 2000 + card,
+      'messageType': 'discovery',
+      'referenceTaskId': 'old-task',
+      'status': 'completed',
+      'exploration': {
+        'cards': [
+          {'materialId': 'material-$card', 'summary': '历史发现$card'},
+        ],
+      },
+    };
+    controller.merge({
+      'turns': [
+        {...turn(1, '探索前'), 'createTime': 1000},
+        {...turn(2, '探索后'), 'createTime': 3000},
+        cardTurn(1),
+      ],
+    });
+    expect(controller.messages.expand((message) => message.cards), isEmpty);
+    controller.merge({'turns': [cardTurn(2)]}, live: true);
+    expect(controller.messages.expand((message) => message.cards), isEmpty);
+
+    controller.merge({'turns': [cardTurn(3)]}, live: true);
+    final entries = chatTranscriptEntries(controller.messages);
+    expect(entries.map((entry) => entry.message.text), [
+      '你好',
+      '探索前',
+      '',
+      '你好',
+      '探索后',
+    ]);
+    expect(entries[2].cards.map((card) => card['materialId']), [
+      'material-1',
+      'material-2',
+      'material-3',
+    ]);
+    progress.complete(jsonResponse({'phase': 'searching'}));
+  });
+
+  test('smaller discovery waits for the final server result', () async {
+    final progress = Completer<ResponseBody>();
+    final dio = Dio()
+      ..httpClientAdapter = Adapter((_) => progress.future);
+    final controller = ChatController(
+      ChatService(
+        client: ApiClient(baseUrl: 'https://test', dio: dio),
+        headers: () async => {},
+      ),
+      displayName: '测试',
+    );
+    addTearDown(controller.dispose);
+    final cards = [
+      {'materialId': 'only-card', 'summary': '这次只有一个结果'},
+    ];
+    controller.merge({
+      'turns': [
+        {...turn(1, '探索前'), 'createTime': 1000},
+        {...turn(2, '探索后'), 'createTime': 3000},
+        {
+          ...turn(42, '旧探索'),
+          'messageType': 'discovery',
+          'referenceTaskId': 'old-task',
+          'createTime': 4000,
+          'exploration': {'cards': cards},
+        },
+      ],
+    });
+    expect(controller.messages.expand((message) => message.cards), isEmpty);
+    final done = Completer<void>();
+    controller.addListener(() {
+      if (controller.messages.any((message) => message.cards.isNotEmpty)) {
+        done.complete();
+      }
+    });
+    progress.complete(jsonResponse({
+      'phase': 'complete',
+      'fullAvailableAt': 2000,
+      'cards': cards,
+    }));
+    await done.future;
+    expect(controller.messages.where((message) => !message.isUser).map((m) => m.text), [
+      '探索前',
+      '旧探索',
+      '探索后',
+    ]);
   });
 
   test(

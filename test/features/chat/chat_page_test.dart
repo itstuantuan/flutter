@@ -1,15 +1,49 @@
 import 'dart:async';
 
+import 'package:bots/core/network/api_client.dart';
+import 'package:bots/features/auth/account_service.dart';
+import 'package:bots/features/chat/chat_controller.dart';
 import 'package:bots/features/chat/chat_message.dart';
 import 'package:bots/features/chat/chat_artwork.dart';
 import 'package:bots/features/chat/chat_page.dart';
 import 'package:bots/features/chat/chat_preview_page.dart';
+import 'package:bots/features/chat/chat_service.dart';
+import 'package:bots/features/chat/live_chat_page.dart';
 import 'package:bots/features/chat/voice_capture.dart';
 import 'package:bots/features/chat/voice_playback.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../exploration/fakes.dart' show FakeBotService;
 import 'voice_capture_test.dart' show FakeVoiceRecorder;
+
+class _DelayedChatService extends FakeBotService {
+  final posts = <Map<String, dynamic>>[];
+  final replies = <Completer<Map<String, dynamic>>>[];
+
+  @override
+  Future<Map<String, dynamic>> request(
+    String path, {
+    String method = 'GET',
+    Object? data,
+    Map<String, dynamic>? query,
+    CancelToken? cancelToken,
+  }) {
+    if (method == 'POST' && path.endsWith('/messages')) {
+      posts.add(data as Map<String, dynamic>);
+      final reply = Completer<Map<String, dynamic>>();
+      replies.add(reply);
+      return reply.future;
+    }
+    return super.request(
+      path,
+      method: method,
+      data: data,
+      query: query,
+      cancelToken: cancelToken,
+    );
+  }
+}
 
 class FakePlayback implements VoicePlayback {
   VoiceClip? played;
@@ -82,12 +116,16 @@ void main() {
     tester,
   ) async {
     final sending = Completer<bool>();
+    var sendCount = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: ChatPage(
           onExit: () {},
           onExplore: () {},
-          onSend: (_) => sending.future,
+          onSend: (_) {
+            sendCount++;
+            return sending.future;
+          },
         ),
       ),
     );
@@ -96,10 +134,15 @@ void main() {
     await tester.enterText(field, '你好');
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(tester.widget<TextField>(field).controller!.text, '你好');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    expect(sendCount, 1);
     expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
     expect(tester.testTextInput.isVisible, isTrue);
     sending.complete(true);
     await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
     expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
     expect(tester.testTextInput.isVisible, isTrue);
     await tester.enterText(field, '继续');
@@ -112,6 +155,101 @@ void main() {
     expect(tester.widget<TextField>(field).focusNode!.hasFocus, isFalse);
     expect(tester.testTextInput.isVisible, isFalse);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('live keyboard send shows each bubble before its receipt', (
+    tester,
+  ) async {
+    final service = _DelayedChatService();
+    final controller = ChatController(service, displayName: '测试');
+    addTearDown(controller.dispose);
+    addTearDown(service.events.close);
+    await controller.initializeSession();
+    controller.loading = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveChatPage(
+          accountService: account,
+          controller: controller,
+          onExit: () {},
+          onExplore: () {},
+        ),
+      ),
+    );
+
+    final field = find.byType(TextField);
+    for (final text in ['第一条消息', '第二条消息']) {
+      await tester.enterText(field, text);
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      expect(find.text(text), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    }
+    expect(service.posts.map((body) => body['message']), ['第一条消息', '第二条消息']);
+
+    final first = {
+      'id': 1,
+      'userText': '第一条消息',
+      'clientMessageId': service.posts.first['clientMessageId'],
+      'messageType': 'chat',
+      'status': 'queued',
+    };
+    controller.merge({'turns': [first]}, live: true);
+    await tester.pump();
+    expect(find.text('第一条消息'), findsOneWidget);
+    expect(find.text('正在思考…'), findsOneWidget);
+    service.replies.first.complete(first);
+    service.replies.last.completeError(const ChatException('服务器发送失败'));
+    await tester.pumpAndSettle();
+    expect(find.text('第一条消息'), findsOneWidget);
+    expect(find.text('第二条消息'), findsOneWidget);
+    expect(find.text('服务器发送失败'), findsOneWidget);
+    expect(service.posts, hasLength(2));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('conversation settles at the safe area as the keyboard closes', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewPadding);
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatPage(
+          returningUser: true,
+          showWelcome: false,
+          messages: const [ChatMessage('最近一条消息')],
+          onExit: () {},
+          onExplore: () {},
+        ),
+      ),
+    );
+    final composer = find.byType(TextField);
+    final message = find.byType(ChatBubble);
+    final restingComposer = tester.getRect(composer);
+    final restingMessage = tester.getRect(message);
+    double? previousTop;
+    for (final inset in [280.0, 80.0, 40.0, 34.0, 20.0, 1.0, 0.0]) {
+      tester.view.viewInsets = FakeViewPadding(bottom: inset);
+      await tester.pump();
+      final currentComposer = tester.getRect(composer);
+      final currentMessage = tester.getRect(message);
+      if (previousTop != null) {
+        expect(currentComposer.top, greaterThanOrEqualTo(previousTop));
+      }
+      if (inset <= 34) {
+        expect(currentComposer, restingComposer);
+        expect(currentMessage, restingMessage);
+      }
+      previousTop = currentComposer.top;
+    }
   });
 
   testWidgets(

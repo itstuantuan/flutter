@@ -5,6 +5,7 @@ import 'package:bots/features/auth/startup_profile_store.dart';
 import 'package:bots/features/onboarding/welcome_page.dart';
 import 'package:bots/features/onboarding/world_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:bots/features/chat/chat_page.dart';
@@ -15,7 +16,8 @@ import 'package:bots/features/auth/account_service.dart';
 
 import '../exploration/fakes.dart';
 
-import 'phone_login_page_test.dart' show FakePhoneAccount, fillPhone;
+import 'phone_login_page_test.dart'
+    show FakePhoneAccount, fillPhone, testSession;
 
 class NewAccount extends FakePhoneAccount {
   @override
@@ -35,6 +37,94 @@ class TestProfile extends StartupProfileStore {
 }
 
 void main() {
+  testWidgets('ordinary notification returns to home from chat and plaza', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const channel = MethodChannel('viitor/apns');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    final notifications = <Map<String, String>>[];
+    var authorization = 'notDetermined';
+    var permissionRequests = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'status') return {'authorization': authorization};
+      if (call.method == 'requestPermission') permissionRequests++;
+      if (call.method == 'takeNotification' && notifications.isNotEmpty) {
+        return notifications.removeAt(0);
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    final account = FakePhoneAccount()
+      ..restored = testSession
+      ..logoutWarning = '设备通知解绑尚未确认';
+    final bots = FakeBotService()..confirmed = true;
+    addTearDown(bots.events.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: AuthGate(
+          service: account,
+          profileStore: TestProfile(),
+          chatService: bots,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('开启 Pals 消息通知'), findsNothing);
+    expect(find.text('设备通知解绑尚未确认'), findsNothing);
+    expect(permissionRequests, 0);
+    authorization = 'authorized';
+
+    Future<void> tapNotification(Map<String, String> payload) async {
+      notifications.add(payload);
+      await messenger.handlePlatformMessage(
+        channel.name,
+        channel.codec.encodeMethodCall(const MethodCall('notificationOpened')),
+        null,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> verifyReturnHome(String id) async {
+      await tapNotification({'event': 'home', 'notificationId': id});
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.byType(ChatPage), findsNothing);
+      expect(find.byType(PlazaPage), findsNothing);
+    }
+
+    tester.widget<HomePage>(find.byType(HomePage)).onChat();
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatPage), findsOneWidget);
+    await verifyReturnHome('from-chat');
+
+    tester.widget<HomePage>(find.byType(HomePage)).onExplore();
+    await tester.pumpAndSettle();
+    expect(find.byType(PlazaPage), findsOneWidget);
+    await verifyReturnHome('from-plaza');
+
+    bots.located = {
+      'sessionId': 'session-1',
+      'anchorTurnId': 42,
+      'turns': [discoveryTurn()],
+    };
+    await tapNotification({
+      'event': 'exploration_completed',
+      'taskId': 'task-1',
+      'sessionId': 'session-1',
+      'notificationId': 'card',
+    });
+    expect(tester.widget<ChatPage>(find.byType(ChatPage)).anchorTurnId, 42);
+    expect(find.byType(PlazaPage), findsNothing);
+    expect(bots.starts, 1);
+    await verifyReturnHome('from-notification-chat');
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
   testWidgets(
     'restored new session resumes onboarding when its first save failed',
     (tester) async {

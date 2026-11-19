@@ -140,6 +140,7 @@ class FakeBotService extends ChatService {
     Object? data,
     Map<String, dynamic>? query,
     CancelToken? cancelToken,
+    Map<String, String> extraHeaders = const {},
   }) async {
     _record(path, method, data, query);
     if (failAck) {

@@ -1,8 +1,7 @@
-import '../exploration/discovery_policy.dart';
 import 'chat_message.dart';
 
 /// Presentation-only grouping. Server turns remain separate for replies,
-/// unread receipts and navigation; adjacent discoveries share one carousel.
+/// unread receipts and navigation; one exploration task shares one carousel.
 class ChatTranscriptEntry {
   ChatTranscriptEntry(this.messages);
 
@@ -22,39 +21,23 @@ class ChatTranscriptEntry {
   ];
 }
 
-List<ChatTranscriptEntry> chatTranscriptEntries(
-  List<ChatMessage> messages, {
-  List<Map<String, dynamic>>? visibleCards,
-}) {
-  // Home supplies the authoritative selection. Before it loads, use the newest
-  // chat turns, preserving the server's card order within each turn.
+List<ChatTranscriptEntry> chatTranscriptEntries(List<ChatMessage> messages) {
   final selected = <ChatMessage, List<Map<String, dynamic>>>{};
-  var remaining = maxDiscoveryCards;
-  final seen = <String>{};
+  final seen = <(String, Object)>{};
   for (final message in messages.reversed) {
     if (!message.hasStructuredDiscoveries) continue;
     final cards = <Map<String, dynamic>>[];
     for (final card in message.cards) {
-      if (remaining == 0) break;
-      if (visibleCards != null &&
-          !visibleCards
-              .take(maxDiscoveryCards)
-              .any(
-                (visible) =>
-                    visible['materialId'] == card['materialId'] &&
-                    visible['taskId'] == message.referenceTaskId,
-              )) {
-        continue;
-      }
       final id = card['materialId'];
-      if (id != null && !seen.add('${message.referenceTaskId}:$id')) continue;
+      final task = message.referenceTaskId;
+      if (task != null && id != null && !seen.add((task, id))) continue;
       cards.add(card);
-      remaining--;
     }
     selected[message] = cards;
   }
 
   final entries = <ChatTranscriptEntry>[];
+  final batches = <String, ChatTranscriptEntry>{};
   for (final source in messages) {
     var message = source;
     if (source.hasStructuredDiscoveries) {
@@ -69,13 +52,17 @@ List<ChatTranscriptEntry> chatTranscriptEntries(
         animateReply: source.animateReply,
       );
     }
-    if (message.hasStructuredDiscoveries &&
-        entries.isNotEmpty &&
-        entries.last.message.hasStructuredDiscoveries) {
-      entries.last.messages.add(message);
-    } else {
-      entries.add(ChatTranscriptEntry([message]));
+    final task = message.hasStructuredDiscoveries
+        ? message.referenceTaskId
+        : null;
+    final batch = batches[task];
+    if (batch != null) {
+      batch.messages.add(message);
+      continue;
     }
+    final entry = ChatTranscriptEntry([message]);
+    entries.add(entry);
+    if (task != null) batches[task] = entry;
   }
   return entries;
 }

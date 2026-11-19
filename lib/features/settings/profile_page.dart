@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../shared/app_toast.dart';
 import 'settings_store.dart';
 import 'settings_widgets.dart';
 
@@ -64,9 +65,7 @@ class _ProfilePageState extends State<ProfilePage> {
   late String _name = widget.name;
   late Uint8List? _avatar = widget.avatar;
   bool _busy = false;
-  void _notice(String text) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
-  );
+  void _notice(String text) => showAppToast(context, text);
   Future<void> _editName() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -110,7 +109,8 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _logout() async {
+  Future<void> _confirmLogout() async {
+    if (_busy) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -135,7 +135,11 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed == true && mounted) await _logout();
+  }
+
+  Future<void> _logout() async {
+    if (_busy) return;
     setState(() => _busy = true);
     try {
       await widget.onLogout();
@@ -150,152 +154,182 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) => SettingsScaffold(
     title: '编辑资料',
     child: LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                const SizedBox(height: 32),
-                Semantics(
-                  button: true,
-                  label: '更换头像',
-                  child: InkWell(
-                    onTap: _busy ? null : _changeAvatar,
-                    customBorder: const CircleBorder(),
-                    child: SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: Stack(
-                        children: [
-                          ProfileAvatar(bytes: _avatar, url: widget.avatarUrl),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
+      builder: (context, constraints) => CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  const SizedBox(height: 32),
+                  Semantics(
+                    button: true,
+                    label: '更换头像',
+                    child: InkWell(
+                      onTap: _busy ? null : _changeAvatar,
+                      customBorder: const CircleBorder(),
+                      child: SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: Stack(
+                          children: [
+                            ProfileAvatar(
+                              bytes: _avatar,
+                              url: widget.avatarUrl,
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF222222),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: settingsIcon('camera', 18),
+                              ),
+                            ),
+                            if (_busy)
+                              const Positioned.fill(
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 42),
+                  Material(
+                    color: Colors.white.withValues(alpha: .06),
+                    borderRadius: BorderRadius.circular(12),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        InkWell(
+                          onTap: _busy ? null : _editName,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF222222),
-                                shape: BoxShape.circle,
+                              constraints: const BoxConstraints(minHeight: 56),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.white.withValues(alpha: .08),
+                                  ),
+                                ),
                               ),
-                              child: settingsIcon('camera', 18),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    '昵称',
+                                    style: TextStyle(fontSize: 15),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      _name,
+                                      textAlign: TextAlign.right,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  settingsIcon('profile_chevron', 16),
+                                ],
+                              ),
                             ),
                           ),
-                          if (_busy)
-                            const Positioned.fill(
-                              child: Center(child: CircularProgressIndicator()),
+                        ),
+                        InkWell(
+                          onTap: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: widget.uid),
+                            );
+                            if (mounted) _notice('UID 已复制');
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 56),
+                              child: Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'ViiTor UID',
+                                      style: TextStyle(fontSize: 15),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      widget.uid,
+                                      textAlign: TextAlign.right,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  settingsIcon('copy', 18),
+                                ],
+                              ),
                             ),
-                        ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    height: (constraints.maxHeight * .36).clamp(70, 184),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xFFE8E8ED)
+                              .withValues(alpha: .12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          foregroundColor: const Color(0xFFEF4444)
+                              .withValues(alpha: .71),
+                        ),
+                        onPressed: _busy ? null : _confirmLogout,
+                        child: const Text(
+                          '退出登录',
+                          style: TextStyle(fontSize: 15),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 42),
-                Material(
-                  color: Colors.white.withValues(alpha: .06),
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    children: [
-                      InkWell(
-                        onTap: _busy ? null : _editName,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Container(
-                            constraints: const BoxConstraints(minHeight: 56),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.white.withValues(alpha: .08),
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  '昵称',
-                                  style: TextStyle(fontSize: 15),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    _name,
-                                    textAlign: TextAlign.right,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 14),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                settingsIcon('profile_chevron', 16),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () async {
-                          await Clipboard.setData(
-                            ClipboardData(text: widget.uid),
-                          );
-                          if (mounted) _notice('UID 已复制');
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 56),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  'ViiTor UID',
-                                  style: TextStyle(fontSize: 15),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    widget.uid,
-                                    textAlign: TextAlign.right,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 14),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                settingsIcon('copy', 18),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: (constraints.maxHeight * .36).clamp(70, 184)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        backgroundColor: const Color(0xFFE8E8ED)
-                            .withValues(alpha: .12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        foregroundColor: const Color(0xFFEF4444)
-                            .withValues(alpha: .71),
-                      ),
-                      onPressed: _busy ? null : _logout,
-                      child: const Text('退出登录', style: TextStyle(fontSize: 15)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
-        ),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 28),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFEF4444),
+                    minimumSize: const Size(112, 48),
+                  ),
+                  onPressed: _busy ? null : _logout,
+                  child: const Text('注销账号', style: TextStyle(fontSize: 15)),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     ),
   );

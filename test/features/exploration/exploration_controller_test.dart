@@ -57,7 +57,7 @@ void main() {
     },
   );
 
-  test('home updates share the same three-card selection with chat', () async {
+  test('home keeps its own three-card selection', () async {
     final service = FakeBotService();
     final store = MemoryExplorationStore();
     final controller = ExplorationController(
@@ -74,11 +74,8 @@ void main() {
         ],
       });
       expect(controller.cards, hasLength(3));
-      expect(controller.chat.visibleDiscoveryCards, controller.cards);
       expect(
-        controller.chat.visibleDiscoveryCards!.every(
-          (card) => card['taskId'] == task,
-        ),
+        controller.cards.every((card) => card['taskId'] == task),
         isTrue,
       );
     }
@@ -241,8 +238,8 @@ void main() {
       final posts = service.calls.where((c) => c['method'] == 'POST').toList();
       expect((posts.first['data'] as Map)['clientMessageId'], original);
       expect((posts.last['data'] as Map)['clientMessageId'], original);
-      expect((posts.first['data'] as Map)['tags'], ['music', 'games']);
-      expect((posts.last['data'] as Map)['tags'], ['music', 'games']);
+      expect(posts.first['data'], {'clientMessageId': original, 'need': ''});
+      expect(posts.last['data'], posts.first['data']);
       expect(await controller.startExploration(), 'task-1');
       expect(service.starts, 2);
       expect(controller.chat.messages, isEmpty);
@@ -254,7 +251,9 @@ void main() {
   test(
     'empty home restores previous published discovery from server history',
     () async {
+      final progressGate = Completer<void>();
       final service = FakeBotService()
+        ..progressGate = progressGate
         ..historyItems = [
           {'status': 'completed', 'taskId': 'yesterday'},
         ]
@@ -264,9 +263,13 @@ void main() {
         service: service,
         store: MemoryExplorationStore(),
         displayName: '测试',
-      );
+      )..pause();
       await controller.initialize();
+      await controller.refreshHome();
       await flush();
+      expect(controller.cards, isEmpty);
+      await controller.refreshHome();
+      progressGate.complete();
       await flush();
       expect(controller.cards, hasLength(3));
       expect(controller.cards.first['taskId'], 'yesterday');
@@ -345,7 +348,7 @@ void main() {
       await service.events.close();
     },
   );
-  test('departure reads home and interests once and uses confirmed selection without rereading', () async {
+  test('departure saves unconfirmed interests separately from the start request', () async {
     final service = FakeBotService();
     final controller = ExplorationController(
       service: service,
@@ -360,7 +363,7 @@ void main() {
           confirmations++;
           expect(selection['selected'], ['music']);
           await controller.saveInterests(['游戏']);
-          return ['games'];
+          return true;
         },
       ),
       'task-1',
@@ -373,10 +376,16 @@ void main() {
       ),
       hasLength(1),
     );
-    expect(
-      service.calls.where((c) => c['method'] == 'POST').single['data'],
-      containsPair('tags', ['games']),
+    final saved = service.calls.singleWhere(
+      (c) => c['path'] == '/me/interests' && c['method'] == 'PUT',
     );
+    final started = service.calls.singleWhere((c) => c['method'] == 'POST');
+    expect(saved['data'], containsPair('categories', ['games']));
+    expect(service.calls.indexOf(saved), lessThan(service.calls.indexOf(started)));
+    expect(started['data'], {
+      'clientMessageId': isA<String>(),
+      'need': '',
+    });
     controller.dispose();
     await service.events.close();
   });
@@ -391,7 +400,7 @@ void main() {
       )..pause();
       await controller.initialize();
       expect(
-        await controller.startExploration(confirmInterests: (_) async => null),
+        await controller.startExploration(confirmInterests: (_) async => false),
         isNull,
       );
       expect(service.starts, 0);

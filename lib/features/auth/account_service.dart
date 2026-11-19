@@ -47,11 +47,25 @@ class AccountService {
   bool _sessionBusy = false;
   AccountSession? _session;
   bool testNewUser = false;
+  final Set<Future<void> Function()> beforeLogout = {};
+  String? logoutWarning;
+
+  Future<void> _prepareLogout() async {
+    logoutWarning = null;
+    for (final cleanup in beforeLogout.toList()) {
+      try {
+        await cleanup().timeout(const Duration(seconds: 10));
+      } catch (_) {
+        logoutWarning = '已退出登录，但设备通知解绑尚未确认。离线期间仍可能收到通用提醒。';
+      }
+    }
+  }
 
   Future<void> resetForNewUserTest() => _withSessionLock(() async {
     if (!AppEnv.enableTestTools) throw StateError('测试入口未启用');
     final storage = store;
     if (storage is! SecureSessionStore) throw StateError('不支持重置此存储');
+    await _prepareLogout();
     await storage.resetForNewUserTest();
     _session = null;
     testNewUser = false;
@@ -68,6 +82,35 @@ class AccountService {
 
   /// 本地凭证，不代表服务器已验证 token 仍有效。
   AccountSession? get session => _session;
+
+  /// 在输入手机号前尝试连接账号服务，给 iOS 提前展示联网授权的机会。
+  Future<void> preparePhoneLoginConnection() async {
+    final base = Uri.tryParse(client.dio.options.baseUrl);
+    if (base == null ||
+        base.host.isEmpty ||
+        (base.scheme != 'https' && base.scheme != 'http')) {
+      return;
+    }
+    // HEAD 只访问账号域名，不经过业务签名，不携带手机号或登录凭证。
+    const timeout = Duration(seconds: 5);
+    final probe = Dio(
+      BaseOptions(
+        connectTimeout: timeout,
+        sendTimeout: timeout,
+        receiveTimeout: timeout,
+        followRedirects: false,
+        validateStatus: (_) => true,
+      ),
+    );
+    try {
+      AuthDebugLog.event('Phone login connection probe START');
+      await probe.head<void>('${base.origin}/');
+    } on DioException catch (error, stack) {
+      AuthDebugLog.error('Phone login connection probe', error, stack);
+    } finally {
+      probe.close(force: true);
+    }
+  }
 
   /// Registration history survives logout; it must not be used for auth.
   Future<bool> hasCompletedRegistration() async {
@@ -258,8 +301,9 @@ class AccountService {
     return _session;
   });
 
-  /// 仅清除本地凭证；文档未提供服务端注销接口。
+  /// 先有限等待设备解绑，再清除本地凭证。没有服务端账号注销接口。
   Future<void> logout() => _withSessionLock(() async {
+    await _prepareLogout();
     await store.clear();
     _session = null;
   });

@@ -67,6 +67,82 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('thinking follows the server turn until a reply or failure', (
+    tester,
+  ) async {
+    final controller = ChatController(
+      ChatService(
+        client: ApiClient(baseUrl: 'https://test'),
+        headers: () async => {},
+      ),
+      displayName: 'test',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ListenableBuilder(
+          listenable: controller,
+          builder: (_, _) => ChatPage(
+            onExit: () {},
+            onExplore: () {},
+            onSend: (_) async => true,
+            animate: false,
+            showWelcome: false,
+            messages: controller.messages,
+          ),
+        ),
+      ),
+    );
+
+    final thinking = find.text('正在思考…');
+    expect(thinking, findsNothing);
+    final turn = {'id': 1, 'userText': '你好', 'messageType': 'chat'};
+    controller.merge({
+      'turns': [
+        {...turn, 'status': 'queued', 'updateTime': 1},
+      ],
+    }, live: true);
+    await tester.pump();
+    expect(thinking, findsOneWidget);
+    final thinkingPill = find.ancestor(
+      of: thinking,
+      matching: find.byType(ChatGlass),
+    );
+    final composer = find.byType(TextField);
+    double gapAboveComposer() =>
+        tester.getTopLeft(composer).dy - tester.getBottomLeft(thinkingPill).dy;
+    expect(gapAboveComposer(), greaterThanOrEqualTo(28));
+    addTearDown(tester.view.resetViewInsets);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    await tester.pump();
+    expect(gapAboveComposer(), greaterThanOrEqualTo(28));
+
+    controller.merge({
+      'turns': [
+        {
+          ...turn,
+          'status': 'processing',
+          'assistantText': '你好呀',
+          'updateTime': 2,
+        },
+        {...turn, 'id': 2, 'status': 'processing', 'updateTime': 2},
+      ],
+    }, live: true);
+    await tester.pump();
+    expect(find.text('你好呀'), findsOneWidget);
+    expect(thinking, findsOneWidget);
+
+    controller.merge({
+      'turns': [
+        {...turn, 'id': 2, 'status': 'failed', 'updateTime': 3},
+      ],
+    }, live: true);
+    await tester.pumpAndSettle();
+    expect(thinking, findsNothing);
+    expect(find.text('这次回复未完成，请重新发送消息再试。'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'history stays complete, only newly received replies type progressively',
     (tester) async {

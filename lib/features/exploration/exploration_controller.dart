@@ -51,7 +51,7 @@ class ExplorationController extends ChangeNotifier {
   bool _polling = false, _acking = false;
   Future<void>? _initializing, _homeRequest, _historyRequest;
   Future<Map<String, dynamic>>? _homeFetch;
-  int _homeVersion = 0;
+  int _homeCardsVersion = 0;
   bool _homeLoaded = false;
   bool get loadingCards =>
       cards.isEmpty && !_homeLoaded && error == null && chat.error == null;
@@ -91,7 +91,6 @@ class ExplorationController extends ChangeNotifier {
       _pendingStartId = saved['pendingStartId'] as String?;
       final cached = saved['cards'] as List? ?? [];
       home = {'cards': cached.take(maxDiscoveryCards).toList()};
-      if (cards.isNotEmpty) chat.setVisibleDiscoveryCards(cards);
       ready = true;
       if (_foreground) {
         unawaited(chat.start());
@@ -125,7 +124,6 @@ class ExplorationController extends ChangeNotifier {
 
   void acceptHome(Map<String, dynamic> value) {
     if (_disposed) return;
-    ++_homeVersion;
     final previousCards = cards;
     final incoming = value['cards'] as List? ?? [];
     // Empty/next-day responses do not erase an already displayed discovery.
@@ -135,8 +133,8 @@ class ExplorationController extends ChangeNotifier {
           ? previousCards
           : incoming.take(maxDiscoveryCards).toList(),
     };
-    if (cards.isNotEmpty) chat.setVisibleDiscoveryCards(cards);
     if (incoming.isNotEmpty) {
+      ++_homeCardsVersion;
       _homeLoaded = true;
       _cacheCards();
     }
@@ -152,7 +150,7 @@ class ExplorationController extends ChangeNotifier {
   }
 
   Future<void> _restoreLastDiscovery() async {
-    final version = _homeVersion;
+    final version = _homeCardsVersion;
     var before = 0;
     while (!_disposed) {
       final page = await service.request(
@@ -160,6 +158,7 @@ class ExplorationController extends ChangeNotifier {
         query: {'before': before},
         cancelToken: _cancel,
       );
+      if (_disposed || version != _homeCardsVersion) return;
       for (final raw in page['items'] as List) {
         final turn = raw as Map;
         if (turn['status'] != 'completed') continue;
@@ -168,9 +167,9 @@ class ExplorationController extends ChangeNotifier {
           '/explorations/${Uri.encodeComponent(task)}/progress',
           cancelToken: _cancel,
         );
+        if (_disposed || version != _homeCardsVersion) return;
         final rawCards = progress['cards'] as List? ?? [];
         if (progress['phase'] != 'complete' || rawCards.isEmpty) continue;
-        if (_disposed || version != _homeVersion) return;
         home = {
           ...home,
           'cards': [
@@ -186,7 +185,6 @@ class ExplorationController extends ChangeNotifier {
               },
           ],
         };
-        chat.setVisibleDiscoveryCards(cards);
         _cacheCards();
         _notify();
         return;
@@ -233,8 +231,7 @@ class ExplorationController extends ChangeNotifier {
   }
 
   Future<String?> startExploration({
-    Future<List<String>?> Function(Map<String, dynamic> selection)?
-    confirmInterests,
+    Future<bool> Function(Map<String, dynamic> selection)? confirmInterests,
     bool Function()? isCurrent,
   }) async {
     if (busy || _disposed) return null;
@@ -259,22 +256,18 @@ class ExplorationController extends ChangeNotifier {
       }
       if (_disposed || (isCurrent != null && !isCurrent())) return null;
       final selection = await interests();
-      var tags = List<String>.from(selection['selected'] as List);
       if (selection['confirmed'] != true && confirmInterests != null) {
-        final confirmedTags = await confirmInterests(selection);
-        if (confirmedTags == null) return null;
-        tags = confirmedTags;
+        if (!await confirmInterests(selection)) return null;
       }
       if (_disposed || (isCurrent != null && !isCurrent())) return null;
       _pendingStartId ??= newOperationId();
       // Persist before POST so an app restart cannot create a duplicate operation.
       await _save();
       final session = await chat.initializeSession(cancelToken: _cancel);
-      if (kDebugMode) debugPrint('[Exploration] start tags=$tags');
       final turn = await service.request(
         '/sessions/${Uri.encodeComponent(session)}/explorations',
         method: 'POST',
-        data: {'clientMessageId': _pendingStartId, 'need': '', 'tags': tags},
+        data: {'clientMessageId': _pendingStartId, 'need': ''},
         cancelToken: _cancel,
       );
       final task = turn['taskId'] as String;

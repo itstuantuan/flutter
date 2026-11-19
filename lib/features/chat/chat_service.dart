@@ -17,20 +17,32 @@ class ChatService {
     headers: () async {
       final session = account.session;
       if (session == null) throw const ChatException('请先登录');
-      final channel = switch (session.platform) {
-        'ios' => '300',
-        'android' => '200',
-        _ => throw const ChatException('当前平台尚未配置聊天鉴权'),
-      };
-      final device = await readDeviceUuid(session.platform);
-      return {
-        'Authorization': 'Bearer ${session.token}',
-        'X-User-Id': session.uid,
-        'X-Device-ID': device!,
-        'X-Channel': channel,
-      };
+      return sessionHeaders(session);
     },
   );
+
+  /// Freeze credentials for a device operation; never borrow a later login.
+  factory ChatService.forSession(AccountSession session) => ChatService(
+    client: ApiClient(baseUrl: AppEnv.apiBaseUrl),
+    headers: () => sessionHeaders(session),
+  );
+
+  static Future<Map<String, String>> sessionHeaders(
+    AccountSession session,
+  ) async {
+    final channel = switch (session.platform) {
+      'ios' => '300',
+      'android' => '200',
+      _ => throw const ChatException('当前平台尚未配置聊天鉴权'),
+    };
+    final device = await readDeviceUuid(session.platform);
+    return {
+      'Authorization': 'Bearer ${session.token}',
+      'X-User-Id': session.uid,
+      'X-Device-ID': device!,
+      'X-Channel': channel,
+    };
+  }
 
   final ApiClient client;
   final Future<Map<String, String>> Function() headers;
@@ -42,13 +54,17 @@ class ChatService {
     Object? data,
     Map<String, dynamic>? query,
     CancelToken? cancelToken,
+    Map<String, String> extraHeaders = const {},
   }) async {
     final body = await client.request<dynamic>(
       '/api/v1/chat$path',
       method: method,
       data: data,
       query: query,
-      options: Options(headers: await headers(), followRedirects: false),
+      options: Options(
+        headers: {...await headers(), ...extraHeaders},
+        followRedirects: false,
+      ),
       cancelToken: cancelToken,
     );
     if (body is! Map || body['code'] is! int) {

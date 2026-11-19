@@ -93,7 +93,11 @@ void main() {
     expect(service.sends.last['attachmentIds'], ['audio-1']);
     expect(service.sends.last['referenceTaskId'], 'discovery-1');
     expect(service.sends.last['referenceMaterialId'], 'material-1');
-    expect(chat.messages.single.text, '语音消息');
+    expect(
+      chat.messages.where((message) => message.isUser).single.text,
+      '语音消息',
+    );
+    expect(chat.messages.last.isThinking, isTrue);
     voice.dispose();
     chat.dispose();
     await service.events.close();

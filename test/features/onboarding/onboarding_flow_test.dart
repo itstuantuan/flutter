@@ -57,7 +57,7 @@ void main() {
   );
 
   testWidgets(
-    'registered users skip onboarding even with old welcome progress',
+    'registered users show home immediately without loading mock progress',
     (tester) async {
       final flow = ExperienceController(_MemoryStore());
       await tester.pumpWidget(
@@ -69,10 +69,11 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      expect(flow.ready, isFalse);
       expect(find.byType(WelcomePage), findsNothing);
       expect(find.byType(WorldPage), findsNothing);
       expect(find.byType(HomePage), findsOneWidget);
+      expect(find.textContaining('流程验证'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       flow.dispose();
     },
@@ -108,57 +109,50 @@ void main() {
     },
   );
 
-  testWidgets(
-    'debug review shows both pages and preserves returning user progress',
-    (tester) async {
-      final store = _MemoryStore()..data = {'step': 'name', 'name': '小明'};
-      final flow = ExperienceController(store);
-      await tester.pumpWidget(
-        MaterialApp(
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(disableAnimations: true),
-            child: child!,
-          ),
-          home: ExperiencePage(controller: flow, previewWelcomeOnStart: true),
+  testWidgets('isolated preview preserves returning user progress', (
+    tester,
+  ) async {
+    final store = _MemoryStore()..data = {'step': 'name', 'name': '小明'};
+    final flow = ExperienceController(store);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
         ),
-      );
-      await tester.pump();
-      expect(find.byType(WelcomePage), findsOneWidget);
-      await tester.tap(find.byType(FilledButton));
-      await tester.pump();
-      expect(find.byType(WorldPage), findsOneWidget);
-      await tester.tap(find.byType(FilledButton));
-      await tester.pump();
-      expect(find.byType(WorldPage), findsNothing);
-      expect(find.byType(HomePage), findsOneWidget);
-      await tester.tap(find.text('去看看').hitTestable());
-      await tester.pumpAndSettle();
-      expect(find.byType(PlazaPage), findsOneWidget);
-      expect(find.byType(PlazaDiscoveryDialog), findsNothing);
-      expect(find.text('当前暂无探索发现'), findsOneWidget);
-      await tester.tap(find.byTooltip('返回首页'));
-      await tester.pumpAndSettle();
-      expect(find.byType(HomePage), findsOneWidget);
-      await tester.tap(find.byTooltip('菜单'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('调试工具'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('流程验证'));
-      await tester.pumpAndSettle();
-      expect(find.byType(HomePage), findsNothing);
-      await tester.tap(find.byTooltip('返回首页'));
-      await tester.pumpAndSettle();
-      expect(find.byType(HomePage), findsOneWidget);
-      await tester.tap(find.byTooltip('聊天'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '今天想听音乐');
-      await tester.pump();
-      await tester.testTextInput.receiveAction(TextInputAction.send);
-      await tester.pumpAndSettle();
-      expect(flow.messages, contains('你：今天想听音乐'));
-      expect(store.data?['step'], 'name');
-      await tester.pumpWidget(const SizedBox());
-      flow.dispose();
-    },
-  );
+        home: ExperiencePage(controller: flow, previewWelcomeOnStart: true),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(WelcomePage), findsOneWidget);
+    await tester.tap(find.byType(FilledButton));
+    await tester.pump();
+    expect(find.byType(WorldPage), findsOneWidget);
+    await tester.tap(find.byType(FilledButton));
+    await tester.pump();
+    expect(find.byType(WorldPage), findsNothing);
+    expect(find.byType(HomePage), findsOneWidget);
+    await tester.tap(find.text('去看看').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.byType(PlazaPage), findsOneWidget);
+    expect(find.byType(PlazaDiscoveryDialog), findsNothing);
+    final toast = find.text('当前暂无探索发现');
+    expect(toast, findsOneWidget);
+    expect(toast.hitTestable(), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
+    await tester.tap(find.byTooltip('返回首页'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HomePage), findsOneWidget);
+    expect(toast, findsNothing);
+    await tester.tap(find.byTooltip('聊天'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '今天想听音乐');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+    expect(flow.messages, contains('你：今天想听音乐'));
+    expect(store.data?['step'], 'name');
+    await tester.pumpWidget(const SizedBox());
+    flow.dispose();
+  });
 }

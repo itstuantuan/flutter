@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../shared/design_scene.dart';
-import '../chat/chat_artwork.dart';
 import 'home_chat_hint.dart';
 import 'home_interactions.dart';
 
@@ -135,6 +134,20 @@ class _HomePageState extends State<HomePage> {
             indicatorTop + 30 - 360 * sceneScale,
           );
           final footerBottom = math.max(24.0, safe.bottom) + 6;
+          const toolbarHeight = 45.0;
+          final exploreTop = safe.top + 51;
+          final exploreBottom = math.max(
+            exploreTop,
+            constraints.maxHeight - safe.bottom - HomeExploreBanner.height,
+          );
+          final exploreStart =
+              constraints.maxHeight -
+              footerBottom -
+              (toolbarHeight + HomeExploreBanner.height) / 2;
+          final explorePosition = (exploreStart + _exploreOffsetY).clamp(
+            exploreTop,
+            exploreBottom,
+          );
           // Decorative artwork covers the viewport; its scaled height must
           // not create scroll extent on shorter phones. Only actual content
           // (for example accessibility-sized cards) may require scrolling.
@@ -156,17 +169,18 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             Positioned(
                               left: (contentWidth - 375 * sceneScale) / 2,
-                              top: sceneOffset,
+                              top: 0,
                               width: 375 * sceneScale,
-                              height: 812 * sceneScale,
-                              child: const DesignScene(
+                              height: 812 * sceneScale + sceneOffset,
+                              child: DesignScene(
                                 asset: 'assets/design/home_raw.png',
-                                sourceRect: Rect.fromLTWH(
+                                sourceRect: const Rect.fromLTWH(
                                   -25.04,
                                   -88,
                                   413.08,
                                   926.55,
                                 ),
+                                topExtension: sceneOffset,
                                 semanticLabel: 'ViiTor 在星空露台向你挥手',
                               ),
                             ),
@@ -335,24 +349,14 @@ class _HomePageState extends State<HomePage> {
               ),
               Positioned(
                 left: safe.left,
-                top: ((constraints.maxHeight - 48) / 2 + _exploreOffsetY).clamp(
-                  safe.top + 3,
-                  math.max(
-                    safe.top + 3,
-                    constraints.maxHeight - footerBottom - 56,
-                  ),
-                ),
-                child: ChatExploreBanner(
+                top: explorePosition,
+                child: HomeExploreBanner(
                   key: const ValueKey('home-explore-banner'),
-                  onPressed: () => _act(widget.onExplore),
-                  onDragUpdate: (delta) => setState(() {
-                    _exploreOffsetY = (_exploreOffsetY + delta.dy).clamp(
-                      safe.top + 3 - (constraints.maxHeight - 48) / 2,
-                      math.max(
-                            safe.top + 3,
-                            constraints.maxHeight - footerBottom - 56,
-                          ) -
-                          (constraints.maxHeight - 48) / 2,
+                  onExplore: () => _act(widget.onExplore),
+                  onDrag: (dy) => setState(() {
+                    _exploreOffsetY = (_exploreOffsetY + dy).clamp(
+                      exploreTop - exploreStart,
+                      exploreBottom - exploreStart,
                     );
                   }),
                 ),
@@ -367,7 +371,7 @@ class _HomePageState extends State<HomePage> {
                     const Spacer(),
                     _GlassPill(
                       width: 116,
-                      height: 45,
+                      height: toolbarHeight,
                       opacity: 0.15,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,

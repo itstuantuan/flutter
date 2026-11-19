@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_client.dart';
+import '../exploration/discovery_policy.dart';
 import 'chat_message.dart';
 import 'chat_service.dart';
 
@@ -24,6 +25,7 @@ class ChatController extends ChangeNotifier {
     this.onHome,
     this.loadHome,
     this.onCompletion,
+    this._sessionId,
   });
   final ChatService service;
   final Future<Map<String, dynamic>> Function()? loadHome;
@@ -32,6 +34,11 @@ class ChatController extends ChangeNotifier {
   final void Function(Map<String, dynamic>)? onHome, onCompletion;
   final _turns = <int, Map<String, dynamic>>{};
   final _liveReplies = <int>{};
+  final _outgoingText = <String, ChatMessage>{};
+  final _textRequests = <CancelToken>{};
+  final _discoveryBatches =
+      <String, ({Set<String> materials, int? completedAt})>{};
+  final _discoveryChecks = <String, CancelToken>{};
   String? _sessionId, error;
   Future<String>? _initializing;
   String? _pendingId, _pendingFingerprint;
@@ -40,43 +47,52 @@ class ChatController extends ChangeNotifier {
   int _generation = 0, _attempt = 0;
   CancelToken? _connection, _sendCancel, _locateCancel;
   Timer? _reconnect;
+  int? _olderBefore;
+  bool _loadedLatestHistory = false;
+  CancelToken? _olderHistoryCancel;
+  bool get hasOlderMessages => _olderBefore != null;
+  bool get loadingOlderMessages => _olderHistoryCancel != null;
   int? anchorTurnId;
   int locationRevision = 0;
   String? referenceTaskId, referenceMaterialId;
-  List<Map<String, dynamic>>? visibleDiscoveryCards;
-  void setVisibleDiscoveryCards(List<Map<String, dynamic>> cards) {
-    visibleDiscoveryCards = cards;
-    _notify();
-  }
 
   String? get sessionId => _sessionId;
   bool get unauthorized => _authFailed;
 
   List<ChatMessage> get messages {
-    final turns = _turns.values.toList()
-      ..sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
+    final loaded = _loadedDiscoveryMaterials();
+    final turns = _orderedTurns();
     return [
       for (final turn in turns)
-        if (turn['messageType'] != 'explore_task') ...[
-          if (((turn['userText'] as String? ?? '').isNotEmpty ||
-                  (turn['attachmentIds'] as List? ?? []).isNotEmpty) &&
-              !{'welcome', 'discovery'}.contains(turn['messageType']))
+        if (_canShowTurn(turn, loaded)) ...[
+          if (_hasUserMessage(turn))
             ChatMessage(
               (turn['userText'] as String? ?? '').isNotEmpty
                   ? turn['userText'] as String
                   : '语音消息',
               isUser: true,
               createdAt: _createdAt(turn),
+              clientMessageId: turn['clientMessageId'] as String?,
             ),
           if ((turn['assistantText'] as String? ?? '').isNotEmpty ||
               _cards(turn).isNotEmpty)
             ChatMessage(
               turn['assistantText'] as String? ?? '',
               turnId: turn['id'] as int,
-              referenceTaskId: turn['referenceTaskId'] as String?,
+              referenceTaskId:
+                  _discoveryTask(turn) ??
+                  turn['referenceTaskId'] as String?,
               cards: _cards(turn),
               createdAt: _createdAt(turn),
               animateReply: _liveReplies.contains(turn['id']),
+            )
+          else if (_hasUserMessage(turn) &&
+              (turn['status'] == 'queued' || turn['status'] == 'processing'))
+            ChatMessage(
+              '',
+              turnId: turn['id'] as int,
+              createdAt: _createdAt(turn),
+              isThinking: true,
             ),
           if (turn['status'] == 'failed')
             ChatMessage(
@@ -87,23 +103,154 @@ class ChatController extends ChangeNotifier {
                   : null,
             ),
         ],
+      ..._outgoingText.values,
     ];
   }
 
+  bool _hasUserMessage(Map<String, dynamic> turn) =>
+      !{'welcome', 'discovery'}.contains(turn['messageType']) &&
+      ((turn['userText'] as String? ?? '').isNotEmpty ||
+          (turn['attachmentIds'] as List? ?? []).isNotEmpty);
+
+  bool _isDiscovery(Map<String, dynamic> turn) =>
+      turn['messageType'] == 'discovery' || turn['messageType'] == 'explore';
+
+  String? _discoveryTask(Map<String, dynamic> turn) {
+    if (!_isDiscovery(turn)) return null;
+    final task =
+        turn['referenceTaskId'] ??
+        (turn['messageType'] == 'explore' ? turn['taskId'] : null);
+    return task is String && task.isNotEmpty ? task : null;
+  }
+
+  int? _timestamp(Object? value) => value is int && value > 0 ? value : null;
+
+  int? _turnTime(Map<String, dynamic> turn) =>
+      _discoveryBatches[_discoveryTask(turn)]?.completedAt ??
+      _timestamp(turn['createTime']);
+
   DateTime? _createdAt(Map<String, dynamic> turn) {
-    final value = turn['createTime'];
-    return value is int && value > 0
-        ? DateTime.fromMillisecondsSinceEpoch(value)
-        : null;
+    final time = _turnTime(turn);
+    return time == null ? null : DateTime.fromMillisecondsSinceEpoch(time);
+  }
+
+  List<Map<String, dynamic>> _orderedTurns() {
+    final byId = _turns.keys.toList()..sort();
+    final positions = <int, int>{};
+    var lastChatTime = 0;
+    for (final id in byId) {
+      final turn = _turns[id]!;
+      final time = _turnTime(turn);
+      if (!_isDiscovery(turn) && turn['messageType'] != 'explore_task') {
+        lastChatTime = max(lastChatTime, time ?? 0);
+      }
+      // Keep ordinary chat in server order and place discoveries by their
+      // original timestamp, even if the server inserted them later.
+      positions[id] = _isDiscovery(turn) ? time ?? lastChatTime : lastChatTime;
+    }
+    byId.sort((a, b) {
+      final timeOrder = positions[a]!.compareTo(positions[b]!);
+      return timeOrder == 0 ? a.compareTo(b) : timeOrder;
+    });
+    return [for (final id in byId) _turns[id]!];
+  }
+
+  Set<String> _materialIds(Object? cards) => {
+    if (cards is List)
+      for (final card in cards.whereType<Map>())
+        if (card['materialId'] case final String id when id.isNotEmpty) id,
+  };
+
+  Map<String, Set<String>> _loadedDiscoveryMaterials() {
+    final loaded = <String, Set<String>>{};
+    for (final turn in _turns.values) {
+      final task = _discoveryTask(turn);
+      if (task == null) continue;
+      final cards = _materialIds(_cards(turn));
+      if (cards.isNotEmpty) (loaded[task] ??= {}).addAll(cards);
+    }
+    return loaded;
+  }
+
+  bool _canShowTurn(
+    Map<String, dynamic> turn,
+    Map<String, Set<String>> loaded,
+  ) {
+    if (turn['messageType'] == 'explore_task') return false;
+    if (!_isDiscovery(turn)) return true;
+    if (turn['status'] != 'completed') return turn['status'] == 'failed';
+    final task = _discoveryTask(turn);
+    if (task == null || !loaded.containsKey(task)) return true;
+    final cards = loaded[task]!;
+    final batch = _discoveryBatches[task];
+    return batch == null
+        ? cards.length >= maxDiscoveryCards
+        : cards.containsAll(batch.materials);
+  }
+
+  void _checkDiscoveryBatches(Set<String> tasks) {
+    if (tasks.isEmpty) return;
+    final loaded = _loadedDiscoveryMaterials();
+    for (final task in tasks) {
+      final cards = loaded[task];
+      if (cards == null ||
+          cards.length >= maxDiscoveryCards ||
+          _discoveryBatches.containsKey(task) ||
+          _discoveryChecks.containsKey(task)) {
+        continue;
+      }
+      unawaited(_checkDiscoveryBatch(task));
+    }
+  }
+
+  Future<void> _checkDiscoveryBatch(String task) async {
+    final cancel = _discoveryChecks[task] = CancelToken();
+    try {
+      final progress = await service.request(
+        '/explorations/${Uri.encodeComponent(task)}/progress',
+        cancelToken: cancel,
+      );
+      if (_disposed ||
+          _discoveryBatches.containsKey(task) ||
+          progress['phase'] != 'complete' ||
+          (progress['taskId'] ?? task) != task ||
+          (progress['sessionId'] ?? _sessionId) != _sessionId) {
+        return;
+      }
+      _recordDiscoveryBatch(task, progress['cards'], progress['fullAvailableAt']);
+    } catch (e) {
+      if (!_disposed && e is DioException && e.response?.statusCode == 401) {
+        await handleError(e);
+      }
+      // A subsequent history snapshot or completion event can confirm the batch.
+    } finally {
+      _discoveryChecks.remove(task);
+    }
+  }
+
+  void _recordDiscoveryBatch(String task, Object? cards, Object? completedAt) {
+    final materials = _materialIds(cards);
+    if (materials.isEmpty) return;
+    _discoveryBatches[task] = (
+      materials: materials,
+      completedAt: _timestamp(completedAt),
+    );
+    _notify();
+  }
+
+  void _receiveCompletion(Map<String, dynamic> event) {
+    final task = event['taskId'];
+    if (event['type'] == 'exploration_completed' &&
+        event['sessionId'] == _sessionId &&
+        task is String) {
+      _recordDiscoveryBatch(task, event['cards'], event['completedAt']);
+    }
+    onCompletion?.call(event);
   }
 
   List<Map<String, dynamic>> _cards(Map<String, dynamic> turn) {
     // Only render the backend's published discovery; never create one from an event.
-    if (turn['messageType'] != 'discovery' &&
-        turn['messageType'] != 'explore') {
-      return const [];
-    }
-    if (turn['status'] != 'completed') return const [];
+    if (!_isDiscovery(turn) || turn['status'] != 'completed') return const [];
     final raw = (turn['exploration'] as Map?)?['cards'];
     if (raw is! List) return const [];
     return raw.map((card) => Map<String, dynamic>.from(card as Map)).toList();
@@ -123,14 +270,19 @@ class ChatController extends ChangeNotifier {
   void merge(Map<String, dynamic> snapshot, {bool live = false}) {
     final turns = snapshot['turns'];
     if (turns is! List) throw const ChatException('聊天快照格式错误');
+    final touchedDiscoveries = <String>{};
     for (final raw in turns) {
       final turn = Map<String, dynamic>.from(raw as Map);
       final id = turn['id'] as int;
+      _outgoingText.remove(turn['clientMessageId']);
       final old = _turns[id];
       if (old == null ||
           (turn['updateTime'] as int? ?? 0) >=
               (old['updateTime'] as int? ?? 0)) {
         _turns[id] = turn;
+        if (_discoveryTask(turn) case final String task) {
+          touchedDiscoveries.add(task);
+        }
         if (live && old?['assistantText'] != turn['assistantText']) {
           _liveReplies.add(id);
         } else if (!live) {
@@ -138,6 +290,7 @@ class ChatController extends ChangeNotifier {
         }
       }
     }
+    _checkDiscoveryBatches(touchedDiscoveries);
     _notify();
   }
 
@@ -189,7 +342,53 @@ class ChatController extends ChangeNotifier {
         cursor = next;
       }
     }
-    merge(await service.request(base, cancelToken: cancel));
+    final latest = await service.request(base, cancelToken: cancel);
+    if (_disposed || cancel.isCancelled) return;
+    if (!_loadedLatestHistory) {
+      _olderBefore = _olderCursor(latest);
+      _loadedLatestHistory = true;
+    }
+    merge(latest);
+  }
+
+  int? _olderCursor(Map<String, dynamic> page) {
+    if (page['hasMore'] != true) return null;
+    final turns = page['turns'] as List;
+    if (turns.isEmpty) throw const ChatException('聊天历史游标无效');
+    return turns.map((turn) => (turn as Map)['id'] as int).reduce(min);
+  }
+
+  Future<void> loadOlderMessages() async {
+    final before = _olderBefore;
+    final session = _sessionId;
+    if (_disposed ||
+        _authFailed ||
+        loadingOlderMessages ||
+        before == null ||
+        session == null) {
+      return;
+    }
+    final cancel = _olderHistoryCancel = CancelToken();
+    _notify();
+    try {
+      final page = await service.request(
+        '/sessions/${Uri.encodeComponent(session)}/messages',
+        query: {'before': before},
+        cancelToken: cancel,
+      );
+      if (_disposed) return;
+      final next = _olderCursor(page);
+      if (next != null && (next <= 0 || next >= before)) {
+        throw const ChatException('聊天历史游标无效');
+      }
+      _olderBefore = next;
+      merge(page);
+    } catch (e) {
+      if (!_disposed) await handleError(e);
+    } finally {
+      _olderHistoryCancel = null;
+      _notify();
+    }
   }
 
   Future<void> start() async {
@@ -212,7 +411,7 @@ class ChatController extends ChangeNotifier {
           cancelToken: cancel,
         );
         for (final event in events) {
-          onCompletion!(event);
+          _receiveCompletion(event);
         }
       }
       if (generation != _generation) return;
@@ -233,7 +432,7 @@ class ChatController extends ChangeNotifier {
           error = null;
           _notify();
         } else if (event.type == 'exploration_completed') {
-          onCompletion?.call(
+          _receiveCompletion(
             Map<String, dynamic>.from(jsonDecode(event.data) as Map),
           );
         }
@@ -307,10 +506,11 @@ class ChatController extends ChangeNotifier {
                           .any((card) => card['materialId'] == materialId),
                 )
                 .firstOrNull;
-      anchorTurnId = selectedTurn?['id'] as int? ?? anchor;
-      referenceTaskId = taskId;
-      referenceMaterialId = materialId;
-      locationRevision++;
+      setLocation(
+        selectedTurn?['id'] as int? ?? anchor,
+        taskId: taskId,
+        materialId: materialId,
+      );
       return true;
     } catch (e) {
       if (!_disposed && !cancel.isCancelled) await handleError(e);
@@ -323,12 +523,84 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  void setLocation(int turnId, {required String taskId, String? materialId}) {
+    anchorTurnId = turnId;
+    referenceTaskId = taskId;
+    referenceMaterialId = materialId;
+    locationRevision++;
+  }
+
   void clearLocation() {
     _locateCancel?.cancel();
     locating = false;
     anchorTurnId = null;
     referenceTaskId = null;
     referenceMaterialId = null;
+  }
+
+  Map<String, dynamic> _messageBody(String text, List<String> attachmentIds) => {
+    'message': text,
+    'attachmentIds': attachmentIds,
+    if (referenceTaskId != null) 'referenceTaskId': referenceTaskId,
+    if (referenceMaterialId != null) 'referenceMaterialId': referenceMaterialId,
+  };
+
+  Future<Map<String, dynamic>> _postMessage(
+    String id,
+    Map<String, dynamic> body,
+    CancelToken cancel,
+  ) => service.request(
+    '/sessions/${Uri.encodeComponent(_sessionId!)}/messages',
+    method: 'POST',
+    data: {'clientMessageId': id, ...body},
+    cancelToken: cancel,
+  );
+
+  bool submitText(String text) {
+    text = text.trim();
+    if (_disposed ||
+        _authFailed ||
+        _sessionId == null ||
+        locating ||
+        text.isEmpty) {
+      return false;
+    }
+    if (text.length > 4000) {
+      error = '单条消息最多 4000 字';
+      _notify();
+      return false;
+    }
+    final id = newOperationId();
+    final body = _messageBody(text, const []);
+    _outgoingText[id] = ChatMessage(
+      text,
+      isUser: true,
+      createdAt: DateTime.now(),
+      clientMessageId: id,
+    );
+    error = null;
+    _notify();
+    unawaited(_sendText(id, body));
+    return true;
+  }
+
+  Future<void> _sendText(String id, Map<String, dynamic> body) async {
+    final cancel = CancelToken();
+    _textRequests.add(cancel);
+    try {
+      final turn = await _postMessage(id, body, cancel);
+      if (_disposed) return;
+      merge({
+        'turns': [{...turn, 'clientMessageId': id}],
+      }, live: true);
+    } catch (e) {
+      // The stream can acknowledge the message before the POST returns.
+      if (!_disposed && _outgoingText.containsKey(id)) {
+        await handleError(e);
+      }
+    } finally {
+      _textRequests.remove(cancel);
+    }
   }
 
   Future<bool> send(
@@ -348,13 +620,7 @@ class ChatController extends ChangeNotifier {
       _notify();
       return false;
     }
-    final body = <String, dynamic>{
-      'message': text,
-      'attachmentIds': attachmentIds,
-      if (referenceTaskId != null) 'referenceTaskId': referenceTaskId,
-      if (referenceMaterialId != null)
-        'referenceMaterialId': referenceMaterialId,
-    };
+    final body = _messageBody(text, attachmentIds);
     final fingerprint = jsonEncode(body);
     if (_pendingFingerprint != fingerprint) {
       _pendingFingerprint = fingerprint;
@@ -365,12 +631,7 @@ class ChatController extends ChangeNotifier {
     _notify();
     final cancel = _sendCancel = CancelToken();
     try {
-      final turn = await service.request(
-        '/sessions/${Uri.encodeComponent(_sessionId!)}/messages',
-        method: 'POST',
-        data: {'clientMessageId': _pendingId, ...body},
-        cancelToken: cancel,
-      );
+      final turn = await _postMessage(_pendingId!, body, cancel);
       if (_disposed) return false;
       merge({
         'turns': [turn],
@@ -399,7 +660,14 @@ class ChatController extends ChangeNotifier {
     _disposed = true;
     pause();
     _sendCancel?.cancel();
+    for (final cancel in _textRequests) {
+      cancel.cancel();
+    }
     _locateCancel?.cancel();
+    _olderHistoryCancel?.cancel();
+    for (final cancel in _discoveryChecks.values) {
+      cancel.cancel();
+    }
     super.dispose();
   }
 }

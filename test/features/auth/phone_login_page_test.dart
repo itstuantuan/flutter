@@ -21,12 +21,24 @@ const testSession = AccountSession(
 );
 
 class FakePhoneAccount implements AccountService {
+  @override
+  String? logoutWarning;
+  @override
+  final Set<Future<void> Function()> beforeLogout = {};
   int sends = 0, verifies = 0, cooldown = 0;
+  int connectionProbes = 0;
   AccountSession? restored;
+  @override
+  AccountSession? get session => restored;
   AccountSession result = testSession;
   Object? sendError, verifyError, restoreError;
   Completer<void>? sending;
   String? sentPhone, verifiedCode;
+  @override
+  Future<void> preparePhoneLoginConnection() async {
+    connectionProbes++;
+  }
+
   @override
   Future<AccountSession?> restoreSession() async {
     if (restoreError != null) throw restoreError!;
@@ -59,6 +71,7 @@ class FakePhoneAccount implements AccountService {
     verifies++;
     verifiedCode = code;
     if (verifyError != null) throw verifyError!;
+    restored = result;
     return result;
   }
 
@@ -82,6 +95,22 @@ Future<void> fillPhone(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('iOS phone input starts the connection before any SMS request', (
+    tester,
+  ) async {
+    final service = FakePhoneAccount();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PhoneLoginPage(service: service, onAuthenticated: (_) {}),
+      ),
+    );
+    expect(service.connectionProbes, 1);
+    expect(service.sends, 0);
+    await fillPhone(tester);
+    expect(service.connectionProbes, 1);
+    expect(service.sends, 0);
+  }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
+
   testWidgets(
     'phone requires number and agreement; code supports errors, retry and cooldown',
     (tester) async {

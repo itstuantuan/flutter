@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../plaza/plaza_page.dart';
 import '../plaza/plaza_discovery.dart';
+import '../shared/app_toast.dart';
 import 'exploration_controller.dart';
 import 'discovery_policy.dart';
 
@@ -89,13 +90,7 @@ class _LivePlazaPageState extends State<LivePlazaPage>
       final phase = progress['phase'];
       if ((phase == 'empty' || phase == 'failed') && _terminalShown != phase) {
         _terminalShown = phase as String;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              phase == 'empty' ? '这次没有新的发现，可以返回首页再次出发。' : '这次探索未完成，请返回首页重试。',
-            ),
-          ),
-        );
+        _notice(phase == 'empty' ? '这次没有新的发现，可以返回首页再次出发。' : '这次探索未完成，请返回首页重试。');
       }
     });
     // A network event can arrive while the page is otherwise idle. A post-frame
@@ -177,9 +172,7 @@ class _LivePlazaPageState extends State<LivePlazaPage>
     }
   }
 
-  void _notice(String message) =>
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+  void _notice(String message) => showAppToast(context, message);
 
   Future<void> _chat(bool voice) async {
     await widget.onChat(voice);

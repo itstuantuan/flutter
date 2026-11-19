@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/network/api_client.dart';
+import '../shared/app_toast.dart';
 import 'account_service.dart';
 import 'auth_debug_log.dart';
 
@@ -305,9 +306,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                                       ClipboardData(text: entries.join('\n')),
                                     );
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('诊断日志已复制')),
-                                    );
+                                    showAppToast(context, '诊断日志已复制');
                                   },
                                   child: const Text('复制日志'),
                                 ),

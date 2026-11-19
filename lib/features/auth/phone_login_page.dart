@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/network/api_client.dart';
 import 'account_service.dart';
+import '../settings/privacy_policy_page.dart';
+import '../settings/service_agreement_page.dart';
 import 'phone_login_artwork.dart';
 
 class PhoneLoginPage extends StatefulWidget {
@@ -52,9 +55,14 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _codeStep) setState(() {});
     });
-    if (_codeStep && !widget.preview) {
+    if (!widget.preview) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _codeFocus.requestFocus();
+        if (!mounted) return;
+        if (_codeStep) {
+          _codeFocus.requestFocus();
+        } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+          unawaited(widget.service.preparePhoneLoginConnection());
+        }
       });
     }
   }
@@ -144,17 +152,11 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
       open();
       return;
     }
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(privacy ? '隐私协议' : '服务协议'),
-        content: const Text('协议内容将在正式上线前补充。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('知道了'),
-          ),
-        ],
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            privacy ? const PrivacyPolicyPage() : const ServiceAgreementPage(),
       ),
     );
   }
@@ -342,7 +344,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
     children: [
       Semantics(
         checked: _agreed,
-        label: '同意服务协议和隐私协议',
+        label: '同意服务协议和隐私政策',
         child: InkWell(
           key: const ValueKey('login-agree'),
           splashFactory: NoSplash.splashFactory,
@@ -383,7 +385,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                 color: const Color(0x8FFFFFFF),
               ),
             ),
-            _policyLink('《隐私协议》', true),
+            _policyLink('《隐私政策》', true),
           ],
         ),
       ),

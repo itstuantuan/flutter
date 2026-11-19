@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../shared/app_toast.dart';
 import 'settings_store.dart';
 import 'settings_widgets.dart';
 
@@ -69,9 +70,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
     super.dispose();
   }
 
-  void _notice(String message) =>
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+  void _notice(String message) => showAppToast(context, message);
   Future<void> _select(bool function) async {
     FocusScope.of(context).unfocus();
     final selected = await showSettingsChoices(

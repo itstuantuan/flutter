@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import '../chat/chat_page.dart';
+import '../shared/app_toast.dart';
 import 'plaza_dialogue.dart';
 import 'plaza_discovery.dart';
 import 'plaza_scenarios.dart';
@@ -59,8 +60,7 @@ class _PlazaPageState extends State<PlazaPage> {
     }
     if (_discoveryOpen) return;
     if (widget.discoveries.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('当前暂无探索发现')));
+      showAppToast(context, '当前暂无探索发现');
       return;
     }
     _discoveryOpen = true;

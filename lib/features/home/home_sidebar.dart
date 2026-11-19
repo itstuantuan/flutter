@@ -166,42 +166,6 @@ class HomeSidebar extends StatelessWidget {
                             ], opacity: .08),
                             const SizedBox(height: 20),
                             _group([_row('about', '关于我们', 'about')]),
-                            const SizedBox(height: 14),
-                            _group([
-                              InkWell(
-                                onTap: () => onSelect('debug'),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.tune,
-                                        color: Colors.white70,
-                                        size: 22,
-                                      ),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          '调试工具',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.chevron_right,
-                                        color: Colors.white38,
-                                        size: 16,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ]),
                           ],
                         ),
                       ),

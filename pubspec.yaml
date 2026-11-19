@@ -44,6 +44,7 @@ flutter:
     - assets/chat/
     - assets/login/
     - assets/notifications/
+    - assets/legal/
 
   fonts:
     - family: Newsreader
