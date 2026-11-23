@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -33,6 +34,18 @@ class ExplorationController extends ChangeNotifier {
       onUnauthorized: onUnauthorized,
       loadHome: _fetchHome,
       onCompletion: receiveCompletion,
+      onExplorationProgress: (update) {
+        final task = update['taskId'];
+        if (task is! String ||
+            task != _watchTask ||
+            _disposed ||
+            (update['sessionId'] != null &&
+                update['sessionId'] != chat.sessionId)) {
+          return;
+        }
+        _queueReadyCards(task, update);
+        _notify();
+      },
     );
     chat.addListener(_notify);
   }
@@ -44,6 +57,7 @@ class ExplorationController extends ChangeNotifier {
   bool _squarePending = false;
   final _events = <String, Map<String, dynamic>>{};
   final _completedResults = <String, Map<String, dynamic>>{};
+  final _displayedCards = <String>{};
   final _displayed = <String>{};
   final _pendingAcks = <String, String>{};
   String? _pendingStartId, _watchTask;
@@ -84,6 +98,9 @@ class ExplorationController extends ChangeNotifier {
     try {
       final saved = await store.read();
       if (_disposed) return;
+      _displayedCards.addAll(
+        List<String>.from(saved['displayedCards'] as List? ?? []),
+      );
       _displayed.addAll(List<String>.from(saved['displayed'] as List? ?? []));
       _pendingAcks.addAll(
         Map<String, String>.from(saved['pendingAcks'] as Map? ?? {}),
@@ -104,6 +121,7 @@ class ExplorationController extends ChangeNotifier {
 
   Future<void> _save() {
     final snapshot = <String, dynamic>{
+      'displayedCards': _displayedCards.toList(),
       'displayed': _displayed.toList(),
       'pendingAcks': {..._pendingAcks},
       'pendingStartId': _pendingStartId,
@@ -300,6 +318,53 @@ class ExplorationController extends ChangeNotifier {
     }
   }
 
+  String _cardKey(String task, String material) => jsonEncode([task, material]);
+
+  List<Map> unseenCards(Map<String, dynamic> event) {
+    final task = event['taskId'] as String;
+    final seen = {..._displayedCards};
+    return (event['cards'] as List)
+        .whereType<Map>()
+        .where((card) {
+          final id = card['materialId'];
+          return id is! String || seen.add(_cardKey(task, id));
+        })
+        .take(maxDiscoveryCards)
+        .toList();
+  }
+
+  void _queueReadyCards(String task, Map<String, dynamic> update) {
+    if (_completedResults.containsKey(task)) return;
+    final queued = {
+      for (final event in _events.values)
+        if (event['taskId'] == task)
+          for (final card in (event['cards'] as List).whereType<Map>())
+            card['materialId'],
+    };
+    final fresh = <Map>[];
+    for (final card in (update['cards'] as List? ?? []).whereType<Map>()) {
+      final id = card['materialId'];
+      if (id is! String ||
+          id.isEmpty ||
+          _displayedCards.contains(_cardKey(task, id)) ||
+          !queued.add(id)) {
+        continue;
+      }
+      fresh.add(card);
+    }
+    for (var i = 0; i < fresh.length; i += maxDiscoveryCards) {
+      final batch = fresh.skip(i).take(maxDiscoveryCards).toList();
+      final id =
+          'progress:${jsonEncode([task, ...batch.map((c) => c['materialId'])])}';
+      _events[id] = {
+        'eventId': id,
+        'taskId': task,
+        'cards': batch,
+        '_partial': true,
+      };
+    }
+  }
+
   void receiveCompletion(Map<String, dynamic> event) {
     if (_disposed) return;
     final id = event['eventId'];
@@ -335,8 +400,7 @@ class ExplorationController extends ChangeNotifier {
       '/explorations/${Uri.encodeComponent(taskId)}/progress',
       cancelToken: _cancel,
     );
-    if (result['phase'] != 'complete' ||
-        (result['cards'] as List? ?? []).isEmpty) {
+    if ((result['cards'] as List? ?? []).isEmpty) {
       return null;
     }
     return {...result, 'taskId': taskId};
@@ -358,11 +422,23 @@ class ExplorationController extends ChangeNotifier {
   Future<void> markDisplayed(Map<String, dynamic> event) async {
     final id = event['eventId'] as String;
     if (_displayed.contains(id)) return;
+    final partial = event['_partial'] == true;
+    final task = event['taskId'] as String;
+    final newKeys = <String>{};
+    for (final card in (event['cards'] as List).whereType<Map>().take(
+      maxDiscoveryCards,
+    )) {
+      final material = card['materialId'];
+      if (material is String && _displayedCards.add(_cardKey(task, material))) {
+        newKeys.add(_cardKey(task, material));
+      }
+    }
     _displayed.add(id);
-    _pendingAcks[id] = event['taskId'] as String;
+    if (!partial) _pendingAcks[id] = task;
     try {
       await _save();
     } catch (_) {
+      _displayedCards.removeAll(newKeys);
       _displayed.remove(id);
       _pendingAcks.remove(id);
       rethrow;
@@ -453,6 +529,8 @@ class ExplorationController extends ChangeNotifier {
         cancelToken: _cancel,
       );
       if (_disposed || _watchTask != task) return;
+      if (result['taskId'] != null && result['taskId'] != task) return;
+      _queueReadyCards(task, result);
       final completed = _completedResults[task];
       progress = completed == null
           ? result

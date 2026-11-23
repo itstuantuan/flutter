@@ -43,7 +43,7 @@ class _NamePageState extends State<NamePage> {
   Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
     value: SystemUiOverlayStyle.light,
     child: Scaffold(
-      backgroundColor: const Color(0xFF100621),
+      backgroundColor: const Color(0xFF191039),
       resizeToAvoidBottomInset: false,
       body: LayoutBuilder(
         builder: (context, bounds) {

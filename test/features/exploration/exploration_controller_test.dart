@@ -10,6 +10,61 @@ import 'fakes.dart';
 Future<void> flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  for (final batches in [
+    [1, 2],
+    [2, 1],
+    [1, 1, 1],
+    [3],
+  ]) {
+    test(
+      'polling searching cards delivers $batches before completion without replay',
+      () async {
+        final service = FakeBotService();
+        final store = MemoryExplorationStore();
+        final controller = ExplorationController(
+          service: service,
+          store: store,
+          displayName: '测试',
+        );
+        await controller.initialize();
+        await flush();
+        controller.watchPlaza('task-1');
+        await flush();
+        var count = 0;
+        for (final increment in batches) {
+          final previous = count;
+          count += increment;
+          final snapshot = {
+            'phase': 'searching',
+            'taskId': 'task-1',
+            'cards': [
+              for (var i = 1; i <= count; i++) {'materialId': 'material-$i'},
+            ],
+          };
+          service.progress = snapshot;
+          controller.watchPlaza('task-1');
+          await flush();
+          final batch = controller.pendingEvents.single;
+          expect((batch['cards'] as List).map((c) => c['materialId']), [
+            for (var i = previous + 1; i <= count; i++) 'material-$i',
+          ]);
+          await controller.markDisplayed(batch);
+          expect(controller.pendingEvents, isEmpty);
+        }
+        expect(service.calls.where((c) => c['method'] == 'PUT'), isEmpty);
+        controller.receiveCompletion(completionEvent());
+        expect(
+          controller.unseenCards(controller.pendingEvents.single),
+          isEmpty,
+        );
+        await controller.markDisplayed(controller.pendingEvents.single);
+        expect(service.calls.where((c) => c['method'] == 'PUT'), hasLength(1));
+        controller.dispose();
+        await service.events.close();
+      },
+    );
+  }
+
   test(
     'a completion push cannot be overwritten by a late searching response',
     () async {
@@ -74,10 +129,7 @@ void main() {
         ],
       });
       expect(controller.cards, hasLength(3));
-      expect(
-        controller.cards.every((card) => card['taskId'] == task),
-        isTrue,
-      );
+      expect(controller.cards.every((card) => card['taskId'] == task), isTrue);
     }
     await flush();
     expect(store.value['cards'], controller.cards);
@@ -348,47 +400,50 @@ void main() {
       await service.events.close();
     },
   );
-  test('departure saves unconfirmed interests separately from the start request', () async {
-    final service = FakeBotService();
-    final controller = ExplorationController(
-      service: service,
-      store: MemoryExplorationStore(),
-      displayName: '测试',
-    )..pause();
-    await controller.initialize();
-    var confirmations = 0;
-    expect(
-      await controller.startExploration(
-        confirmInterests: (selection) async {
-          confirmations++;
-          expect(selection['selected'], ['music']);
-          await controller.saveInterests(['游戏']);
-          return true;
-        },
-      ),
-      'task-1',
-    );
-    expect(confirmations, 1);
-    expect(service.calls.where((c) => c['path'] == '/home'), hasLength(1));
-    expect(
-      service.calls.where(
-        (c) => c['path'] == '/me/interests' && c['method'] == 'GET',
-      ),
-      hasLength(1),
-    );
-    final saved = service.calls.singleWhere(
-      (c) => c['path'] == '/me/interests' && c['method'] == 'PUT',
-    );
-    final started = service.calls.singleWhere((c) => c['method'] == 'POST');
-    expect(saved['data'], containsPair('categories', ['games']));
-    expect(service.calls.indexOf(saved), lessThan(service.calls.indexOf(started)));
-    expect(started['data'], {
-      'clientMessageId': isA<String>(),
-      'need': '',
-    });
-    controller.dispose();
-    await service.events.close();
-  });
+  test(
+    'departure saves unconfirmed interests separately from the start request',
+    () async {
+      final service = FakeBotService();
+      final controller = ExplorationController(
+        service: service,
+        store: MemoryExplorationStore(),
+        displayName: '测试',
+      )..pause();
+      await controller.initialize();
+      var confirmations = 0;
+      expect(
+        await controller.startExploration(
+          confirmInterests: (selection) async {
+            confirmations++;
+            expect(selection['selected'], ['music']);
+            await controller.saveInterests(['游戏']);
+            return true;
+          },
+        ),
+        'task-1',
+      );
+      expect(confirmations, 1);
+      expect(service.calls.where((c) => c['path'] == '/home'), hasLength(1));
+      expect(
+        service.calls.where(
+          (c) => c['path'] == '/me/interests' && c['method'] == 'GET',
+        ),
+        hasLength(1),
+      );
+      final saved = service.calls.singleWhere(
+        (c) => c['path'] == '/me/interests' && c['method'] == 'PUT',
+      );
+      final started = service.calls.singleWhere((c) => c['method'] == 'POST');
+      expect(saved['data'], containsPair('categories', ['games']));
+      expect(
+        service.calls.indexOf(saved),
+        lessThan(service.calls.indexOf(started)),
+      );
+      expect(started['data'], {'clientMessageId': isA<String>(), 'need': ''});
+      controller.dispose();
+      await service.events.close();
+    },
+  );
   test(
     'cancelled interest selection or leaving route never starts exploration',
     () async {

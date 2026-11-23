@@ -8,6 +8,62 @@ import 'fakes.dart';
 
 void main() {
   testWidgets(
+    'ready cards present in batches and completion does not replay them',
+    (tester) async {
+      final service = FakeBotService();
+      final controller = ExplorationController(
+        service: service,
+        store: MemoryExplorationStore(),
+        displayName: '测试',
+      );
+      await controller.initialize();
+      await controller.chat.initializeSession();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final cards = (completionEvent()['cards'] as List).cast<Map>();
+      void ready(int count) {
+        service.progress = {
+          'phase': 'searching',
+          'cards': cards.take(count).toList(),
+        };
+      }
+
+      ready(1);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LivePlazaPage(
+            controller: controller,
+            taskId: 'task-1',
+            onChat: (_) async {},
+            onOpenDiscovery: (_, _) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dialog = find.byType(PlazaDiscoveryDialog);
+      Iterable<String?> materials() => tester
+          .widget<PlazaDiscoveryDialog>(dialog)
+          .discoveries
+          .map((c) => c.materialId);
+      expect(materials(), ['material-1']);
+      ready(3);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(materials(), ['material-1']);
+      controller.receiveCompletion(completionEvent());
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(materials(), ['material-2', 'material-3']);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(dialog, findsNothing);
+      expect(controller.pendingEvents, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await service.events.close();
+    },
+  );
+
+  testWidgets(
     'bubble follows server elapsed time, connection errors and completion',
     (tester) async {
       final service = FakeBotService();

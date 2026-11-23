@@ -83,7 +83,7 @@ class _LivePlazaPageState extends State<LivePlazaPage>
           .where((event) => !_presentedHere.contains(event['eventId']))
           .toList();
       if (events.isNotEmpty) {
-        unawaited(_present(events.first));
+        unawaited(_present(events.first, automatic: true));
         return;
       }
       final progress = widget.controller.progress;
@@ -98,13 +98,29 @@ class _LivePlazaPageState extends State<LivePlazaPage>
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  Future<void> _present(Map<String, dynamic> event) async {
+  Future<void> _present(
+    Map<String, dynamic> event, {
+    bool automatic = false,
+  }) async {
     if (_showing) return;
     _showing = true;
     _lastPresentedTask = event['taskId'] as String?;
     final eventId = event['eventId'] as String?;
     if (eventId != null) _presentedHere.add(eventId);
-    final cards = (event['cards'] as List).cast<Map>().take(maxDiscoveryCards);
+    final cards = automatic
+        ? widget.controller.unseenCards(event)
+        : (event['cards'] as List).cast<Map>().take(maxDiscoveryCards);
+    if (cards.isEmpty) {
+      try {
+        await widget.controller.markDisplayed(event);
+      } catch (e) {
+        await widget.controller.reportError(e);
+      } finally {
+        _showing = false;
+        if (mounted) _refresh();
+      }
+      return;
+    }
     final discoveries = cards
         .map(
           (card) => PlazaDiscovery(
@@ -125,7 +141,7 @@ class _LivePlazaPageState extends State<LivePlazaPage>
             ? null
             : () => unawaited(
                 widget.controller
-                    .markDisplayed(event)
+                    .markDisplayed({...event, 'cards': cards.toList()})
                     .catchError((Object e) => widget.controller.reportError(e)),
               ),
       );

@@ -25,6 +25,7 @@ class ChatController extends ChangeNotifier {
     this.onHome,
     this.loadHome,
     this.onCompletion,
+    this.onExplorationProgress,
     this._sessionId,
   });
   final ChatService service;
@@ -32,6 +33,7 @@ class ChatController extends ChangeNotifier {
   final String displayName;
   final Future<void> Function()? onUnauthorized;
   final void Function(Map<String, dynamic>)? onHome, onCompletion;
+  final void Function(Map<String, dynamic>)? onExplorationProgress;
   final _turns = <int, Map<String, dynamic>>{};
   final _liveReplies = <int>{};
   final _outgoingText = <String, ChatMessage>{};
@@ -80,8 +82,7 @@ class ChatController extends ChangeNotifier {
               turn['assistantText'] as String? ?? '',
               turnId: turn['id'] as int,
               referenceTaskId:
-                  _discoveryTask(turn) ??
-                  turn['referenceTaskId'] as String?,
+                  _discoveryTask(turn) ?? turn['referenceTaskId'] as String?,
               cards: _cards(turn),
               createdAt: _createdAt(turn),
               animateReply: _liveReplies.contains(turn['id']),
@@ -217,7 +218,11 @@ class ChatController extends ChangeNotifier {
           (progress['sessionId'] ?? _sessionId) != _sessionId) {
         return;
       }
-      _recordDiscoveryBatch(task, progress['cards'], progress['fullAvailableAt']);
+      _recordDiscoveryBatch(
+        task,
+        progress['cards'],
+        progress['fullAvailableAt'],
+      );
     } catch (e) {
       if (!_disposed && e is DioException && e.response?.statusCode == 401) {
         await handleError(e);
@@ -431,6 +436,10 @@ class ChatController extends ChangeNotifier {
           _attempt = 0;
           error = null;
           _notify();
+        } else if (event.type == 'exploration_progress') {
+          onExplorationProgress?.call(
+            Map<String, dynamic>.from(jsonDecode(event.data) as Map),
+          );
         } else if (event.type == 'exploration_completed') {
           _receiveCompletion(
             Map<String, dynamic>.from(jsonDecode(event.data) as Map),
@@ -538,7 +547,10 @@ class ChatController extends ChangeNotifier {
     referenceMaterialId = null;
   }
 
-  Map<String, dynamic> _messageBody(String text, List<String> attachmentIds) => {
+  Map<String, dynamic> _messageBody(
+    String text,
+    List<String> attachmentIds,
+  ) => {
     'message': text,
     'attachmentIds': attachmentIds,
     if (referenceTaskId != null) 'referenceTaskId': referenceTaskId,
@@ -591,7 +603,9 @@ class ChatController extends ChangeNotifier {
       final turn = await _postMessage(id, body, cancel);
       if (_disposed) return;
       merge({
-        'turns': [{...turn, 'clientMessageId': id}],
+        'turns': [
+          {...turn, 'clientMessageId': id},
+        ],
       }, live: true);
     } catch (e) {
       // The stream can acknowledge the message before the POST returns.
