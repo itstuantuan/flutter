@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -115,19 +117,19 @@ class _ProfilePageState extends State<ProfilePage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF474451),
-        title: const Text('退出登录', style: TextStyle(color: Colors.white)),
-        content: const Text(
+        title: const AppText('退出登录', style: TextStyle(color: Colors.white)),
+        content: const AppText(
           '确定退出当前账号吗？',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const AppText('取消'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
+            child: const AppText(
               '退出登录',
               style: TextStyle(color: Color(0xFFEF4444)),
             ),
@@ -164,7 +166,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 32),
                   Semantics(
                     button: true,
-                    label: '更换头像',
+                    label: translate(context, '更换头像'),
                     child: InkWell(
                       onTap: _busy ? null : _changeAvatar,
                       customBorder: const CircleBorder(),
@@ -222,7 +224,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               child: Row(
                                 children: [
-                                  const Text(
+                                  const AppText(
                                     '昵称',
                                     style: TextStyle(fontSize: 15),
                                   ),
@@ -300,7 +302,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               .withValues(alpha: .71),
                         ),
                         onPressed: _busy ? null : _confirmLogout,
-                        child: const Text(
+                        child: const AppText(
                           '退出登录',
                           style: TextStyle(fontSize: 15),
                         ),
@@ -324,7 +326,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     minimumSize: const Size(112, 48),
                   ),
                   onPressed: _busy ? null : _logout,
-                  child: const Text('注销账号', style: TextStyle(fontSize: 15)),
+                  child: const AppText('注销账号', style: TextStyle(fontSize: 15)),
                 ),
               ),
             ),
@@ -381,7 +383,7 @@ class _EditNamePageState extends State<EditNamePage> {
       actions: [
         TextButton(
           onPressed: _busy ? null : _save,
-          child: Text(
+          child: AppText(
             _busy ? '保存中' : '保存',
             style: const TextStyle(color: Color(0xFF73B5EE), fontSize: 14),
           ),
@@ -422,7 +424,7 @@ class _EditNamePageState extends State<EditNamePage> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
+          AppText(
             _error ?? '请设置 1-7 个字符',
             style: TextStyle(
               color: _error == null ? settingsMuted : const Color(0xFFEF4444),

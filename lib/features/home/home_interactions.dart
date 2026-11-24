@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
@@ -73,8 +75,8 @@ class _HomeExploreBannerState extends State<HomeExploreBanner> {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: '逛一逛',
-    hint: _collapsed ? '展开入口，可上下拖动' : '进入广场，可上下拖动',
+    label: translate(context, '逛一逛'),
+    hint: translate(context, _collapsed ? '展开入口，可上下拖动' : '进入广场，可上下拖动'),
     onTap: _activate,
     child: ExcludeSemantics(
       child: Listener(
@@ -99,9 +101,26 @@ class _HomeExploreBannerState extends State<HomeExploreBanner> {
                             left: -107,
                             top: (HomeExploreBanner.height - 40) / 2,
                             child: SvgPicture.asset(
-                              'assets/home/explore.svg',
+                              'assets/home/explore_background.svg',
                               width: 237,
                               height: 40,
+                            ),
+                          ),
+                          const Positioned(
+                            left: 18,
+                            top: 14,
+                            width: 65,
+                            height: 23,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: AppText(
+                                '逛一逛',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],

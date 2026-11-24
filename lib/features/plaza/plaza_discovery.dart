@@ -1,6 +1,9 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class PlazaDiscovery {
@@ -11,28 +14,40 @@ class PlazaDiscovery {
     this.image = 'assets/design/discovery_illustration.png',
     this.coverUrl,
     this.materialId,
+    this.sourceCard,
   });
 
   final String title, body, category, image;
   final String? coverUrl, materialId;
+  final Map<String, dynamic>? sourceCard;
 }
 
 Future<PlazaDiscovery?> showPlazaDiscoveries(
   BuildContext context, {
   required List<PlazaDiscovery> discoveries,
   int initialPage = 0,
+  ValueListenable<List<PlazaDiscovery>>? updates,
   VoidCallback? onPresented,
 }) {
   assert(discoveries.isNotEmpty);
   return showDialog<PlazaDiscovery>(
     context: context,
     barrierColor: const Color(0xB3000000),
-    barrierLabel: '关闭发现',
-    builder: (_) => PlazaDiscoveryDialog(
-      discoveries: discoveries,
-      initialPage: initialPage,
-      onPresented: onPresented,
-    ),
+    barrierLabel: translate(context, '关闭发现'),
+    builder: (_) => updates == null
+        ? PlazaDiscoveryDialog(
+            discoveries: discoveries,
+            initialPage: initialPage,
+            onPresented: onPresented,
+          )
+        : ValueListenableBuilder<List<PlazaDiscovery>>(
+            valueListenable: updates,
+            builder: (_, cards, _) => PlazaDiscoveryDialog(
+              discoveries: cards,
+              initialPage: initialPage,
+              onPresented: onPresented,
+            ),
+          ),
   );
 }
 
@@ -66,7 +81,10 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
     0,
     widget.discoveries.length - 1,
   );
-  late final _pages = PageController(initialPage: _selected);
+  late final _pages = PageController(
+    initialPage: _selected,
+    viewportFraction: .74,
+  );
 
   @override
   void dispose() {
@@ -79,17 +97,18 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
     backgroundColor: Colors.transparent,
     shadowColor: Colors.transparent,
     elevation: 0,
-    insetPadding: const EdgeInsets.symmetric(vertical: 16),
+    insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final width = math.min(375.0, constraints.maxWidth);
+        final viewportWidth = math.min(480.0, constraints.maxWidth);
+        final width = math.min(375.0, MediaQuery.sizeOf(context).width);
         final textScale = MediaQuery.textScalerOf(context).scale(21) / 21;
         final height = math.min(
           constraints.maxHeight,
           (509.0 + math.max(0, textScale - 1) * 150) * width / 375,
         );
         return SizedBox(
-          width: width,
+          width: viewportWidth,
           height: height,
           child: Column(
             children: [
@@ -99,16 +118,52 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
                   controller: _pages,
                   itemCount: widget.discoveries.length,
                   onPageChanged: (value) => setState(() => _selected = value),
-                  itemBuilder: (context, index) => SingleChildScrollView(
-                    child: FittedBox(
-                      fit: BoxFit.fitWidth,
+                  itemBuilder: (context, index) => AnimatedBuilder(
+                    animation: _pages,
+                    builder: (context, child) {
+                      final page =
+                          _pages.hasClients &&
+                              _pages.position.hasContentDimensions
+                          ? _pages.page ?? _selected.toDouble()
+                          : _selected.toDouble();
+                      final distance = (index - page).abs().clamp(0.0, 1.0);
+                      final scale = MediaQuery.disableAnimationsOf(context)
+                          ? (index == _selected ? 1.0 : .86)
+                          : 1.0 - .14 * Curves.easeInOut.transform(distance);
+                      // Keep a visible gap between the full-size card faces,
+                      // independent of the viewport used to reveal neighbours.
+                      final extraSpacing = math.max(
+                        0.0,
+                        width * .744 + 12 - viewportWidth * .74,
+                      );
+                      return Transform.translate(
+                        offset: Offset((index - page) * extraSpacing, 0),
+                        child: Transform.scale(
+                          key: ValueKey('plaza-discovery-scale-$index'),
+                          scale: scale,
+                          alignment: Alignment.center,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: OverflowBox(
+                      minWidth: width,
+                      maxWidth: width,
                       alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: 375,
-                        child: _DiscoveryCard(
-                          discovery: widget.discoveries[index],
-                          onOpen: () =>
-                              Navigator.pop(context, widget.discoveries[index]),
+                      child: SingleChildScrollView(
+                        child: FittedBox(
+                          fit: BoxFit.fitWidth,
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: 375,
+                            child: _DiscoveryCard(
+                              discovery: widget.discoveries[index],
+                              onOpen: () => Navigator.pop(
+                                context,
+                                widget.discoveries[index],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -128,8 +183,10 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
                       Semantics(
                         button: true,
                         selected: index == _selected,
-                        label:
-                            '第 ${index + 1} 条发现，共 ${widget.discoveries.length} 条',
+                        label: translate(
+                          context,
+                          '第 ${index + 1} 条发现，共 ${widget.discoveries.length} 条',
+                        ),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _pages.animateToPage(
@@ -346,7 +403,7 @@ class _DiscoveryCard extends StatelessWidget {
                           letterSpacing: 1,
                         ),
                       ),
-                      child: const Text('查看内容'),
+                      child: const AppText('查看内容'),
                     ),
                   ),
                 ],
@@ -434,14 +491,17 @@ class _CategoryTag extends StatelessWidget {
           child: Transform.rotate(
             angle: -4.19 * math.pi / 180,
             child: const Center(
-              child: Text(
-                '类型',
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontFamily: 'PingFang SC',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFFFDD87),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: AppText(
+                  '类型',
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    fontFamily: 'PingFang SC',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFFDD87),
+                  ),
                 ),
               ),
             ),
@@ -456,7 +516,10 @@ class _CategoryTag extends StatelessWidget {
             angle: 10.81 * math.pi / 180,
             child: Center(
               child: Text(
-                label,
+                label
+                    .split('·')
+                    .map((part) => translate(context, part.trim()))
+                    .join(' · '),
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.ellipsis,

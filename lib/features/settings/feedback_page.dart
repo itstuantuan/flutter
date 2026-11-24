@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -151,7 +153,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
   Widget _label(String text, {bool required = false}) => Text.rich(
     TextSpan(
       children: [
-        TextSpan(text: text),
+        TextSpan(text: translate(context, text)),
         if (required)
           const TextSpan(
             text: ' *',
@@ -168,7 +170,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
   );
   Widget _choice(bool function) => FormField<String>(
     validator: (_) => (function ? _function : _type) == null
-        ? (function ? '请选择功能' : '请选择问题类型')
+        ? translate(context, function ? '请选择功能' : '请选择问题类型')
         : null,
     builder: (field) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +193,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: AppText(
                     (function ? _function : _type) ??
                         (function ? '请选择功能' : '请选择问题'),
                     style: TextStyle(
@@ -210,7 +212,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
         if (field.hasError)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text(
+            child: AppText(
               field.errorText!,
               style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12),
             ),
@@ -220,7 +222,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
   );
   InputDecoration _decoration(String hint, {Color? fill, int radius = 16}) =>
       InputDecoration(
-        hintText: hint,
+        hintText: translate(context, hint),
         filled: true,
         fillColor: fill ?? Colors.white.withValues(alpha: .06),
         contentPadding: const EdgeInsets.all(14),
@@ -287,7 +289,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                             ),
                             validator: (value) =>
                                 value == null || value.trim().isEmpty
-                                ? '请填写详细描述'
+                                ? translate(context, '请填写详细描述')
                                 : null,
                             decoration:
                                 _decoration(
@@ -324,8 +326,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     Text.rich(
                       TextSpan(
                         children: [
-                          const TextSpan(
-                            text: '上传截图  ',
+                          TextSpan(
+                            text: translate(context, '上传截图  '),
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -388,7 +390,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                         if (_images.length < 3)
                           Semantics(
                             button: true,
-                            label: '上传截图',
+                            label: translate(context, '上传截图'),
                             child: InkWell(
                               onTap: _saving || _picking ? null : _pick,
                               borderRadius: BorderRadius.circular(12),
@@ -433,7 +435,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                               value.trim().isNotEmpty &&
                               !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
                                   .hasMatch(value.trim())
-                          ? '请输入有效邮箱'
+                          ? translate(context, '请输入有效邮箱')
                           : null,
                     ),
                     const SizedBox(height: 16),

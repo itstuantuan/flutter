@@ -1,9 +1,12 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 
 import '../experience/experience_page.dart';
 import '../chat/chat_service.dart';
 import 'account_service.dart';
 import 'phone_login_page.dart';
+import 'google_login_page.dart';
 import 'name_page.dart';
 import 'startup_profile_store.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -27,30 +30,35 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  // Read the device locale, not MaterialApp's selected interface language.
+  // Keep the selected login flow stable until this gate is recreated.
+  late final bool _usePhoneLogin =
+      WidgetsBinding.instance.platformDispatcher.locale.countryCode
+          ?.toUpperCase() ==
+      'CN';
   bool _loading = true, _authenticated = false, _newUser = false;
   String? _error;
   Map<String, dynamic> _profile = {};
   bool _returning = false;
   String? _uid;
-  Map<String, dynamic> get _registrationChats =>
-      Map<String, dynamic>.from(_profile['registrationChats'] as Map? ?? {});
+  Map<String, dynamic> _userProfile = {};
+  bool _introCompletedThisVisit = false;
 
   Future<void> _authenticatedSession(AccountSession session) async {
-    final chats = _registrationChats;
+    final profile = await widget.profileStore.readUser(session.uid);
     final pending =
-        chats[session.uid] == 'pending' ||
+        profile['registrationChat'] == 'pending' ||
         ((widget.service.testNewUser || session.isNewUser) &&
-            chats[session.uid] != 'done');
-    if (pending) {
-      final value = {
-        ..._profile,
-        'registrationChats': {...chats, session.uid: 'pending'},
-      };
-      await widget.profileStore.write(value);
-      _profile = value;
-    }
+            profile['registrationChat'] != 'done');
+    final next = {
+      ...profile,
+      if (pending) 'registrationChat': 'pending',
+      if (pending && _introCompletedThisVisit) 'introDone': true,
+    };
+    if (pending) await widget.profileStore.writeUser(session.uid, next);
     if (!mounted) return;
     setState(() {
+      _userProfile = next;
       _uid = session.uid;
       _newUser = pending;
       _authenticated = true;
@@ -58,22 +66,30 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _completeRegistrationChat() async {
-    final value = {
-      ..._profile,
-      'registrationChats': {..._registrationChats, _uid!: 'done'},
-    };
-    await widget.profileStore.write(value);
+    final value = {..._userProfile, 'registrationChat': 'done'};
+    await widget.profileStore.writeUser(_uid!, value);
     if (!mounted) return;
     setState(() {
-      _profile = value;
+      _userProfile = value;
       _newUser = false;
     });
   }
 
   Future<bool> _advance(String? next) async {
-    final value = {..._profile, 'page': next, 'introDone': next == null};
-    await widget.profileStore.write(value);
-    if (mounted) setState(() => _profile = value);
+    if (_authenticated) {
+      final value = {..._userProfile, 'page': next, 'introDone': next == null};
+      await widget.profileStore.writeUser(_uid!, value);
+      if (mounted) setState(() => _userProfile = value);
+    } else {
+      final value = {..._profile, 'page': next, 'introDone': next == null};
+      await widget.profileStore.write(value);
+      if (mounted) {
+        setState(() {
+          _profile = value;
+          _introCompletedThisVisit = next == null;
+        });
+      }
+    }
     return true;
   }
 
@@ -124,8 +140,11 @@ class _AuthGateState extends State<AuthGate> {
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_error!, style: const TextStyle(color: Colors.white)),
-                    TextButton(onPressed: _restore, child: const Text('重试')),
+                    AppText(
+                      _error!,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    TextButton(onPressed: _restore, child: const AppText('重试')),
                   ],
                 ),
         ),
@@ -138,18 +157,32 @@ class _AuthGateState extends State<AuthGate> {
         onComplete: () {},
       );
     }
+    if (_authenticated && _newUser && _userProfile['introDone'] != true) {
+      return OnboardingFlow(
+        key: ValueKey('onboarding-$_uid'),
+        initialPageId: _userProfile['page'] as String?,
+        onAdvance: _advance,
+        onComplete: () {},
+      );
+    }
     if (_authenticated &&
         _newUser &&
-        (_profile['name'] as String? ?? '').isEmpty) {
+        (_userProfile['name'] as String? ?? '').isEmpty) {
       return NamePage(
         onContinue: (name) async {
-          final value = {..._profile, 'name': name};
-          await widget.profileStore.write(value);
-          if (mounted) setState(() => _profile = value);
+          final value = {..._userProfile, 'name': name};
+          await widget.profileStore.writeUser(_uid!, value);
+          if (mounted) setState(() => _userProfile = value);
         },
       );
     }
     if (!_authenticated) {
+      if (!_usePhoneLogin) {
+        return GoogleLoginPage(
+          service: widget.service,
+          onAuthenticated: _authenticatedSession,
+        );
+      }
       return PhoneLoginPage(
         service: widget.service,
         onAuthenticated: _authenticatedSession,
@@ -157,6 +190,7 @@ class _AuthGateState extends State<AuthGate> {
     }
     return widget.experienceBuilder?.call(_newUser) ??
         ExperiencePage(
+          key: ValueKey(_uid),
           userId: _uid!,
           accountService: widget.service,
           chatService: widget.chatService,

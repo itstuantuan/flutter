@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -64,10 +66,26 @@ class OnboardingScaffold extends StatelessWidget {
               28.0,
             );
             final bottom = math.max(34.0, safe.bottom) + bottomGap + 2;
+            final buttonWidth = math.min(availableWidth * 291 / 375, 466.0);
+            final buttonLabel = TextPainter(
+              text: TextSpan(
+                text: translate(context, nextLabel),
+                style: const TextStyle(
+                  fontFamily: 'PingFang SC',
+                  fontSize: 16,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
+                ),
+              ),
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout(maxWidth: math.max(1, buttonWidth - 61));
             final buttonHeight = math.max(
               56.0,
-              MediaQuery.textScalerOf(context).scale(16) * 1.25 + 24,
+              math.max(22.0, buttonLabel.height) + 24,
             );
+            buttonLabel.dispose();
             const indicatorHeight = 13.043;
             const indicatorGap = 16.48;
             final footerHeight = buttonHeight + indicatorGap + indicatorHeight;
@@ -130,12 +148,15 @@ class OnboardingScaffold extends StatelessWidget {
                   bottom: bottom,
                   child: Center(
                     child: SizedBox(
-                      width: math.min(availableWidth * 291 / 375, 466),
+                      width: buttonWidth,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Semantics(
-                            label: '引导，第 ${pageIndex + 1} 页，共 $pageCount 页',
+                            label: translate(
+                              context,
+                              '引导，第 ${pageIndex + 1} 页，共 $pageCount 页',
+                            ),
                             child: pageCount == 2
                                 ? Image.asset(
                                     'assets/onboarding/${pageIndex == 0 ? 'indicator' : 'world_indicator'}.png',
@@ -206,12 +227,14 @@ class OnboardingScaffold extends StatelessWidget {
                                     ),
                                   const SizedBox(width: 7),
                                   Flexible(
-                                    child: Text(
+                                    child: AppText(
                                       nextLabel,
+                                      textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         fontFamily: 'PingFang SC',
                                         letterSpacing: 1,
                                         fontSize: 16,
+                                        height: 1.25,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -232,7 +255,7 @@ class OnboardingScaffold extends StatelessWidget {
                     bottom: math.max(4, safe.bottom),
                     child: Semantics(
                       liveRegion: true,
-                      child: Text(
+                      child: AppText(
                         error!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
@@ -288,17 +311,17 @@ class OnboardingHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: heading),
+          AppText(title, style: heading),
           SizedBox(height: titleGap),
           ShaderMask(
             blendMode: BlendMode.srcIn,
             shaderCallback: (bounds) => const LinearGradient(
               colors: [Color(0xFF7DD5FF), Color(0xFFFF85D6)],
             ).createShader(Rect.fromLTWH(0, 0, 216, bounds.height)),
-            child: Text(subtitle, style: heading),
+            child: AppText(subtitle, style: heading),
           ),
           SizedBox(height: descriptionGap),
-          Text(
+          AppText(
             description,
             style: TextStyle(
               fontFamily: 'PingFang SC',

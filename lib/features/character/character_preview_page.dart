@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -93,7 +95,7 @@ class _CharacterPreviewPageState extends State<CharacterPreviewPage> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFF171136),
     appBar: AppBar(
-      title: const Text('角色待机预览'),
+      title: const AppText('角色待机预览'),
       foregroundColor: Colors.white,
       backgroundColor: const Color(0xFF171136),
     ),
@@ -113,7 +115,7 @@ class _CharacterPreviewPageState extends State<CharacterPreviewPage> {
               children: [
                 const Padding(
                   padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
-                  child: Text(
+                  child: AppText(
                     'ViiTor · 陪在你身边',
                     style: TextStyle(color: Colors.white70, fontSize: 16),
                   ),
@@ -165,7 +167,7 @@ class _CharacterPreviewPageState extends State<CharacterPreviewPage> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
+                            child: AppText(
                               playing ? '轻轻呼吸，慢慢摇摆' : '已暂停',
                               style: const TextStyle(color: Colors.white),
                             ),
@@ -181,7 +183,7 @@ class _CharacterPreviewPageState extends State<CharacterPreviewPage> {
                       ),
                       Row(
                         children: [
-                          const Text(
+                          const AppText(
                             '动作幅度',
                             style: TextStyle(color: Colors.white70),
                           ),
@@ -202,7 +204,7 @@ class _CharacterPreviewPageState extends State<CharacterPreviewPage> {
                           ),
                         ],
                       ),
-                      const Text(
+                      const AppText(
                         '静态角色图演示 · 后续可替换正式动画素材',
                         style: TextStyle(color: Colors.white54, fontSize: 12),
                       ),

@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -112,7 +114,7 @@ class _PlazaDialogueState extends State<PlazaDialogue>
                 ),
                 const SizedBox(width: 4),
                 Flexible(
-                  child: Text(
+                  child: AppText(
                     '欢迎加入创造广场',
                     style: const TextStyle(
                       fontFamily: 'PingFang SC',
@@ -152,13 +154,13 @@ class _PlazaDialogueState extends State<PlazaDialogue>
                     children: [
                       if (_lines[i].speaker.isNotEmpty)
                         TextSpan(
-                          text: '${_lines[i].speaker}: ',
+                          text: '${translate(context, _lines[i].speaker)}: ',
                           style: const TextStyle(
                             color: Color(0xFF6ADAFF),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      TextSpan(text: _lines[i].text),
+                      TextSpan(text: translate(context, _lines[i].text)),
                     ],
                   ),
                   style: const TextStyle(

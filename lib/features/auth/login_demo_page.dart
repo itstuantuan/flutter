@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -135,7 +137,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
     final seconds = service.resendSeconds(_fullPhone);
     final signer = service.client.signer;
     return Scaffold(
-      appBar: AppBar(title: const Text('账号登录测试')),
+      appBar: AppBar(title: const AppText('账号登录测试')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -152,12 +154,12 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                   style: TextStyle(fontSize: 12),
                 ),
 
-                Text(
+                AppText(
                   '账号接口 Demo',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
-                Text(
+                AppText(
                   '产品：${signer?.product ?? "未配置"} · 平台：${signer?.platform ?? "未配置"}',
                 ),
                 const SizedBox(height: 4),
@@ -168,11 +170,11 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                 const SizedBox(height: 24),
                 OutlinedButton(
                   onPressed: _busy ? null : _googleLogin,
-                  child: const Text('使用 Google 账号登录'),
+                  child: const AppText('使用 Google 账号登录'),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(child: Text('或使用手机验证码')),
+                  child: Center(child: AppText('或使用手机验证码')),
                 ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +188,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: '国家区号',
                           prefixText: '+',
                         ),
@@ -201,9 +203,9 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: '手机号',
-                          hintText: '输入测试手机号',
+                          hintText: translate(context, '输入测试手机号'),
                         ),
                       ),
                     ),
@@ -212,7 +214,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                 const SizedBox(height: 16),
                 OutlinedButton(
                   onPressed: _busy || seconds > 0 ? null : _send,
-                  child: Text(seconds > 0 ? '${seconds}s 后重新发送' : '发送验证码'),
+                  child: AppText(seconds > 0 ? '${seconds}s 后重新发送' : '发送验证码'),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -221,7 +223,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                   keyboardType: TextInputType.number,
                   autofillHints: const [AutofillHints.oneTimeCode],
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(labelText: '短信验证码'),
+                  decoration: InputDecoration(labelText: '短信验证码'),
                   onSubmitted: (_) {
                     if (!_busy) _login();
                   },
@@ -229,7 +231,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _busy ? null : _login,
-                  child: const Text('登录并保存会话'),
+                  child: const AppText('登录并保存会话'),
                 ),
                 const SizedBox(height: 20),
                 if (_busy) const LinearProgressIndicator(),
@@ -253,7 +255,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          AppText(
                             '当前会话',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
@@ -262,14 +264,14 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                             'UID：${session.uid}\n昵称：${session.nick}\n手机号：${session.phone.isEmpty ? '未绑定' : session.phone}\n邮箱：${session.email.isEmpty ? '未返回' : session.email}\n产品 / 平台：${session.product} / ${session.platform}\n首次注册：${session.isNewUser ? "是" : "否"}',
                           ),
                           const SizedBox(height: 8),
-                          const Text('Token 已保存（不显示完整凭证）'),
+                          const AppText('Token 已保存（不显示完整凭证）'),
                         ],
                       ),
                     ),
                   ),
                 OutlinedButton(
                   onPressed: _busy ? null : _restore,
-                  child: const Text('读取本地会话'),
+                  child: const AppText('读取本地会话'),
                 ),
                 TextButton(
                   onPressed: _busy
@@ -279,7 +281,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                           _code.clear();
                           return '本地会话已清除。';
                         }),
-                  child: const Text('退出并清除本地会话'),
+                  child: const AppText('退出并清除本地会话'),
                 ),
                 const SizedBox(height: 16),
                 if (kDebugMode)
@@ -291,14 +293,14 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Text('诊断日志（最近 80 条）'),
+                            const AppText('诊断日志（最近 80 条）'),
                             Wrap(
                               spacing: 8,
                               children: [
                                 TextButton(
                                   onPressed: () =>
                                       AuthDebugLog.event('日志输出测试 OK'),
-                                  child: const Text('测试日志输出'),
+                                  child: const AppText('测试日志输出'),
                                 ),
                                 TextButton(
                                   onPressed: () async {
@@ -308,7 +310,7 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                                     if (!context.mounted) return;
                                     showAppToast(context, '诊断日志已复制');
                                   },
-                                  child: const Text('复制日志'),
+                                  child: const AppText('复制日志'),
                                 ),
                               ],
                             ),
@@ -321,11 +323,11 @@ class _LoginDemoPageState extends State<LoginDemoPage> {
                       ),
                     ),
                   ),
-                const Text(
+                const AppText(
                   '若控制台没有日志，可在本页复制诊断日志。',
                   style: TextStyle(fontSize: 12),
                 ),
-                const Text(
+                const AppText(
                   '会发送真实短信。同一手机号间隔至少 60 秒，每天最多 3 次。\nip 默认为空；移动端 uuid 自动从设备读取。',
                   style: TextStyle(fontSize: 12),
                 ),

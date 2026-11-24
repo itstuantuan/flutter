@@ -1,7 +1,10 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 import 'dart:ui';
 
 import '../chat/chat_page.dart';
+import '../discoveries/discovery_detail_page.dart';
 import '../shared/app_toast.dart';
 import 'plaza_dialogue.dart';
 import 'plaza_discovery.dart';
@@ -71,36 +74,19 @@ class _PlazaPageState extends State<PlazaPage> {
         discoveries: widget.discoveries,
       );
       if (!mounted || selected == null) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (context) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  selected.title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  selected.body,
-                  style: const TextStyle(fontSize: 16, height: 1.6),
-                ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('返回广场'),
-                ),
-              ],
-            ),
-          ),
-        ),
+      final card =
+          selected.sourceCard ??
+          {
+            'title': selected.title,
+            'content': selected.body,
+            'category': selected.category,
+            'coverUrl': selected.coverUrl,
+            'materialId': selected.materialId,
+          };
+      final quote = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (_) => DiscoveryDetailPage(card: card)),
       );
+      if (mounted && quote != null) _chat(context, false);
     } finally {
       _discoveryOpen = false;
     }
@@ -157,7 +143,10 @@ class _PlazaPageState extends State<PlazaPage> {
                           child: Image.asset(
                             'assets/design/plaza_scene.png',
                             fit: BoxFit.fill,
-                            semanticLabel: 'ViiTor 和伙伴们在明亮的创作广场散步',
+                            semanticLabel: translate(
+                              context,
+                              'ViiTor 和伙伴们在明亮的创作广场散步',
+                            ),
                           ),
                         ),
                         Positioned(
@@ -214,7 +203,7 @@ class _PlazaPageState extends State<PlazaPage> {
                 height: 240 * scale,
                 child: Semantics(
                   button: true,
-                  label: '查看广场发现',
+                  label: translate(context, '查看广场发现'),
                   child: GestureDetector(
                     key: const ValueKey('plaza-discovery-trigger'),
                     behavior: HitTestBehavior.opaque,
@@ -243,7 +232,7 @@ class _PlazaPageState extends State<PlazaPage> {
                 bottom: math.max(safe.bottom, 34) + 6,
                 child: Semantics(
                   button: true,
-                  label: '回首页',
+                  label: translate(context, '回首页'),
                   child: GestureDetector(
                     key: const ValueKey('plaza-home-button'),
                     onTap: () => Navigator.maybePop(context),
@@ -268,7 +257,7 @@ class _PlazaPageState extends State<PlazaPage> {
                             'assets/design/plaza_home_back.svg',
                             excludeFromSemantics: true,
                           ),
-                          const Text(
+                          const AppText(
                             '回首页',
                             style: TextStyle(
                               color: Colors.white,
@@ -341,7 +330,7 @@ class _PlazaPageState extends State<PlazaPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           IconButton(
-                            tooltip: '广场聊天',
+                            tooltip: translate(context, '广场聊天'),
                             onPressed: () => _chat(context, false),
                             icon: SvgPicture.asset(
                               'assets/home/chat.svg',
@@ -350,7 +339,7 @@ class _PlazaPageState extends State<PlazaPage> {
                             ),
                           ),
                           IconButton(
-                            tooltip: '广场语音',
+                            tooltip: translate(context, '广场语音'),
                             onPressed: () => _chat(context, true),
                             icon: SvgPicture.asset(
                               'assets/home/microphone.svg',
@@ -372,7 +361,7 @@ class _PlazaPageState extends State<PlazaPage> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     IconButton(
-                      tooltip: '返回首页',
+                      tooltip: translate(context, '返回首页'),
                       onPressed: () => Navigator.maybePop(context),
                       icon: SvgPicture.asset(
                         'assets/design/plaza_back.svg',
@@ -382,7 +371,7 @@ class _PlazaPageState extends State<PlazaPage> {
                       ),
                     ),
                     Expanded(
-                      child: Text(
+                      child: AppText(
                         _scenario.title,
                         textAlign: TextAlign.center,
                         style: const TextStyle(

@@ -72,6 +72,7 @@ class ChatController extends ChangeNotifier {
               (turn['userText'] as String? ?? '').isNotEmpty
                   ? turn['userText'] as String
                   : '语音消息',
+              isInterfaceText: (turn['userText'] as String? ?? '').isEmpty,
               isUser: true,
               createdAt: _createdAt(turn),
               clientMessageId: turn['clientMessageId'] as String?,
@@ -98,6 +99,7 @@ class ChatController extends ChangeNotifier {
           if (turn['status'] == 'failed')
             ChatMessage(
               '这次回复未完成，请重新发送消息再试。${_failureCode(turn)}',
+              isInterfaceText: true,
               createdAt: _createdAt(turn),
               turnId: (turn['assistantText'] as String? ?? '').isEmpty
                   ? turn['id'] as int
@@ -537,6 +539,12 @@ class ChatController extends ChangeNotifier {
     referenceTaskId = taskId;
     referenceMaterialId = materialId;
     locationRevision++;
+  }
+
+  void referenceDiscovery(Map<String, dynamic>? card) {
+    referenceTaskId = (card?['_chatTaskId'] ?? card?['taskId']) as String?;
+    referenceMaterialId = card?['materialId'] as String?;
+    _notify();
   }
 
   void clearLocation() {

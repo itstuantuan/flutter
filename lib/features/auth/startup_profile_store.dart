@@ -15,6 +15,28 @@ class StartupProfileStore {
   Future<void> write(Map<String, dynamic> value) =>
       storage.write(key: _key, value: jsonEncode(value));
 
+  /// Unowned legacy names/intro progress must never be assigned to an account.
+  Future<Map<String, dynamic>> readUser(String userId) async {
+    if (userId.isEmpty) throw ArgumentError('User ID is required');
+    final root = await read();
+    final user = (root['users'] as Map?)?[userId];
+    if (user is Map) return Map<String, dynamic>.from(user);
+    final registration = (root['registrationChats'] as Map?)?[userId];
+    return {
+      'registrationChat': ?registration,
+      if (registration == 'done') 'introDone': true,
+    };
+  }
+
+  Future<void> writeUser(String userId, Map<String, dynamic> value) async {
+    if (userId.isEmpty) throw ArgumentError('User ID is required');
+    final root = await read();
+    await write({
+      ...root,
+      'users': {...?root['users'] as Map?, userId: value},
+    });
+  }
+
   Future<bool> hasSelectedInterests(String userId) async {
     final profile = await read();
     final selected = (profile['interestsByUser'] as Map?)?[userId];

@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 
 import 'settings_widgets.dart';
@@ -35,7 +37,7 @@ class NotificationsPage extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 80),
             child: Center(
-              child: Text('暂无系统通知', style: TextStyle(color: settingsMuted)),
+              child: AppText('暂无系统通知', style: TextStyle(color: settingsMuted)),
             ),
           ),
         for (final message in messages)

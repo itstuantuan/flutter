@@ -1,3 +1,5 @@
+import '../../core/localization/app_language.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -55,11 +57,15 @@ class SystemDictation extends ChangeNotifier {
       }
       final locales = await _speech.locales();
       if (generation != _generation) return;
-      final chinese = locales.where(
-        (l) => l.localeId.replaceAll('_', '-').toLowerCase() == 'zh-cn',
+      final language = AppLanguage.instance.locale.languageCode;
+      final matching = locales.where(
+        (l) => l.localeId
+            .replaceAll('_', '-')
+            .toLowerCase()
+            .startsWith('$language-'),
       );
-      if (chinese.isEmpty) {
-        error = '当前设备不支持中文语音识别，请使用文字输入。';
+      if (matching.isEmpty) {
+        error = '当前设备不支持所选语言的语音识别，请使用文字输入。';
         return;
       }
       active = true;
@@ -85,7 +91,7 @@ class SystemDictation extends ChangeNotifier {
           notifyListeners();
         },
         listenOptions: SpeechListenOptions(
-          localeId: chinese.first.localeId,
+          localeId: matching.first.localeId,
           listenMode: ListenMode.dictation,
           partialResults: true,
           cancelOnError: true,

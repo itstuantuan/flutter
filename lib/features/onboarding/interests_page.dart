@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -100,7 +102,7 @@ class _InterestsPageState extends State<InterestsPage>
       return Semantics(
         button: true,
         selected: selected,
-        label: label,
+        label: translate(context, label),
         child: GestureDetector(
           key: ValueKey('interest-$label'),
           onTap: _busy ? null : () => _toggle(label),
@@ -146,19 +148,22 @@ class _InterestsPageState extends State<InterestsPage>
                       duration: _reduceMotion
                           ? Duration.zero
                           : const Duration(milliseconds: 280),
-                      child: FittedBox(
+                      child: SizedBox.square(
+                        dimension: diameter,
                         key: ValueKey(selected),
-                        child: _svg(
-                          selected
-                              ? (i == 4 ? 'selected_large' : 'selected')
-                              : (i == 0 || i == 6 ? 'small' : 'circle'),
-                          slots[i].$3,
-                          slots[i].$3,
+                        child: FittedBox(
+                          child: _svg(
+                            selected
+                                ? (i == 4 ? 'selected_large' : 'selected')
+                                : (i == 0 || i == 6 ? 'small' : 'circle'),
+                            slots[i].$3,
+                            slots[i].$3,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  Text(
+                  AppText(
                     label,
                     style: const TextStyle(
                       color: Colors.white,
@@ -192,7 +197,16 @@ class _InterestsPageState extends State<InterestsPage>
           alignment: WrapAlignment.spaceAround,
           spacing: 10,
           runSpacing: 12,
-          children: [for (var i = 0; i < slots.length; i++) bubble(i, 100)],
+          children: [
+            for (var i = 0; i < slots.length; i++)
+              bubble(
+                i,
+                math.min(
+                  width - 32,
+                  math.max(100, _labelWidth(designInterests[i], 16) + 32),
+                ),
+              ),
+          ],
         ),
       );
     }
@@ -307,7 +321,7 @@ class _InterestsPageState extends State<InterestsPage>
                                               22.5,
                                             ),
                                           ),
-                                          const Text(
+                                          const AppText(
                                             '你对什么感兴趣?',
                                             style: TextStyle(
                                               fontSize: 26,
@@ -350,7 +364,7 @@ class _InterestsPageState extends State<InterestsPage>
                                 ),
                                 const Padding(
                                   padding: EdgeInsets.fromLTRB(18, 12, 18, 18),
-                                  child: Text(
+                                  child: AppText(
                                     '选择你喜欢的内容,可多选:',
                                     style: TextStyle(
                                       fontSize: 14,
@@ -362,7 +376,7 @@ class _InterestsPageState extends State<InterestsPage>
                                 _bubbles(width, large),
                                 const SizedBox(height: 26),
                                 Center(
-                                  child: Text(
+                                  child: AppText(
                                     '-  选择${_selected.length},还可以选择${9 - _selected.length}个 -',
                                     style: const TextStyle(
                                       fontSize: 12,
@@ -378,29 +392,21 @@ class _InterestsPageState extends State<InterestsPage>
                                   child: LayoutBuilder(
                                     builder: (context, bounds) {
                                       const gap = 12.0;
-                                      final minWidth =
-                                          MediaQuery.textScalerOf(context)
-                                              .scale(24) +
-                                          37;
-                                      final columns =
-                                          ((bounds.maxWidth + gap) /
-                                                  (minWidth + gap))
-                                              .floor()
-                                              .clamp(1, 4);
-                                      final chipWidth =
-                                          (bounds.maxWidth -
-                                              gap * (columns - 1)) /
-                                          columns;
                                       return Wrap(
                                         spacing: gap,
                                         runSpacing: 11,
                                         children: [
                                           for (final label in _selected)
-                                            SizedBox(
-                                              width: chipWidth,
+                                            ConstrainedBox(
+                                              constraints: BoxConstraints(
+                                                maxWidth: bounds.maxWidth,
+                                              ),
                                               child: Semantics(
                                                 button: true,
-                                                label: '移除$label',
+                                                label: translate(
+                                                  context,
+                                                  '移除$label',
+                                                ),
                                                 child: GestureDetector(
                                                   key: ValueKey(
                                                     'remove-$label',
@@ -424,13 +430,20 @@ class _InterestsPageState extends State<InterestsPage>
                                                           ),
                                                     ),
                                                     child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
                                                       mainAxisAlignment:
                                                           MainAxisAlignment
                                                               .center,
                                                       children: [
                                                         Flexible(
-                                                          child: Text(
+                                                          child: AppText(
                                                             label,
+                                                            maxLines: 1,
+                                                            softWrap: false,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
                                                             style:
                                                                 const TextStyle(
                                                                   color: Colors
@@ -459,7 +472,7 @@ class _InterestsPageState extends State<InterestsPage>
                                 if (_error != null)
                                   Padding(
                                     padding: const EdgeInsets.all(16),
-                                    child: Text(
+                                    child: AppText(
                                       _error!,
                                       style: const TextStyle(
                                         color: Color(0xFFFFB2DA),
@@ -473,43 +486,7 @@ class _InterestsPageState extends State<InterestsPage>
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 112,
-                                child: _button(
-                                  'all',
-                                  _selected.length == designInterests.length
-                                      ? '取消全选'
-                                      : '全选',
-                                  Colors.black,
-                                  () => setState(() {
-                                    final allSelected =
-                                        _selected.length ==
-                                        designInterests.length;
-                                    _selected.clear();
-                                    if (!allSelected) {
-                                      _selected.addAll(designInterests);
-                                    }
-                                    _error = null;
-                                  }),
-                                ),
-                              ),
-                              const SizedBox(width: 9),
-                              Expanded(
-                                flex: 222,
-                                child: Opacity(
-                                  opacity: _selected.isEmpty ? .24 : 1,
-                                  child: _button(
-                                    'start',
-                                    _busy ? '保存中…' : '开始探索',
-                                    Colors.white,
-                                    _selected.isEmpty ? null : _start,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          child: _footer(),
                         ),
                       ],
                     ),
@@ -522,6 +499,69 @@ class _InterestsPageState extends State<InterestsPage>
       ),
     ),
   );
+  double _labelWidth(String label, double fontSize) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: translate(context, label),
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 1,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  Widget _footer() => LayoutBuilder(
+    builder: (context, bounds) {
+      final allLabel = _selected.length == designInterests.length
+          ? '取消全选'
+          : '全选';
+      final startLabel = _busy ? '保存中…' : '开始探索';
+      final all = _button(
+        'all',
+        allLabel,
+        Colors.black,
+        () => setState(() {
+          final allSelected = _selected.length == designInterests.length;
+          _selected.clear();
+          if (!allSelected) _selected.addAll(designInterests);
+          _error = null;
+        }),
+      );
+      final start = Opacity(
+        opacity: _selected.isEmpty ? .24 : 1,
+        child: _button(
+          'start',
+          startLabel,
+          Colors.white,
+          _selected.isEmpty ? null : _start,
+        ),
+      );
+      final allWidth = _labelWidth(allLabel, 16) + 32;
+      final startWidth = _labelWidth(startLabel, 16) + 32;
+      if (allWidth + startWidth + 9 > bounds.maxWidth) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [all, const SizedBox(height: 8), start],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(flex: allWidth.ceil(), child: all),
+          const SizedBox(width: 9),
+          Expanded(flex: startWidth.ceil(), child: start),
+        ],
+      );
+    },
+  );
+
   Widget _button(
     String asset,
     String label,
@@ -542,8 +582,9 @@ class _InterestsPageState extends State<InterestsPage>
           overlayColor: Colors.transparent,
           minimumSize: const Size(double.infinity, 50),
         ),
-        child: Text(
+        child: AppText(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: color,
             fontSize: 16,

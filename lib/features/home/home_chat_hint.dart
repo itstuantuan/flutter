@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -119,17 +121,21 @@ class _HomeChatHintState extends State<HomeChatHint>
                               left: 13,
                               top: 12,
                               width: 127,
-                              child: Text(
-                                '快跟我聊聊吧',
-                                textAlign: TextAlign.center,
-                                textScaler: TextScaler.noScaling,
-                                style: TextStyle(
-                                  fontFamily: 'PingFang SC',
-                                  fontSize: 14,
-                                  height: 20 / 14,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: .14,
-                                  color: Colors.white,
+                              height: 22,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: AppText(
+                                  '快跟我聊聊吧',
+                                  textAlign: TextAlign.center,
+                                  textScaler: TextScaler.noScaling,
+                                  style: TextStyle(
+                                    fontFamily: 'PingFang SC',
+                                    fontSize: 14,
+                                    height: 20 / 14,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: .14,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),

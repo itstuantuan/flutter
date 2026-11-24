@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -73,14 +75,14 @@ class _SplashPageState extends State<SplashPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(_error!, style: const TextStyle(color: Colors.white)),
+                AppText(_error!, style: const TextStyle(color: Colors.white)),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
                     setState(() => _error = null);
                     _prepare();
                   },
-                  child: const Text('重试'),
+                  child: const AppText('重试'),
                 ),
               ],
             ),
@@ -255,7 +257,7 @@ class _SplashArtworkState extends State<SplashArtwork>
     child: Scaffold(
       backgroundColor: const Color(0xFF431A90),
       body: Semantics(
-        label: 'Pals。你的专属 AI 伙伴，也是另一个自己。Welcome to Pals!',
+        label: translate(context, 'Pals。你的专属 AI 伙伴，也是另一个自己。Welcome to Pals!'),
         image: true,
         child: ExcludeSemantics(
           child: SizedBox.expand(
@@ -288,6 +290,51 @@ class _SplashArtworkState extends State<SplashArtwork>
   );
 
   Widget _layerImage(String name) {
+    if (name == 'splash_brand') {
+      // The source export includes Chinese lettering under the logo. Clip that
+      // line out and render locale-aware copy, preserving the original mark.
+      return Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 55,
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.topCenter,
+                minHeight: 80.089,
+                maxHeight: 80.089,
+                child: Image.asset(
+                  'assets/design/splash_brand.png',
+                  width: 254.505,
+                  height: 80.089,
+                  fit: BoxFit.fill,
+                ),
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 21,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: AppText(
+                '你的专属 AI 伙伴，也是另一个自己。',
+                style: TextStyle(
+                  color: Color(0xFFEC6AE8),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     final image = RepaintBoundary(
       child: Image.asset(
         'assets/design/$name.png',

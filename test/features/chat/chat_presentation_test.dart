@@ -10,6 +10,54 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('returning chat shows a separate back arrow beside the avatar', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final width in [375.0, 320.0]) {
+      tester.view.physicalSize = Size(width, 812);
+      var exits = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatPage(
+            returningUser: true,
+            animate: false,
+            name: 'Tony',
+            onExit: () => exits++,
+            onExplore: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final back = find.byKey(const ValueKey('chat-back'));
+      expect(back.hitTestable(), findsOneWidget);
+      expect(tester.getSize(back), const Size(44, 44));
+      expect(tester.getCenter(back).dx, 28);
+      expect(tester.getTopLeft(find.byTooltip('Tony')).dx, 49);
+      await tester.tap(find.text('Tony'));
+      expect(exits, 0);
+      await tester.tap(back);
+      expect(exits, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('registration chat retains its skip action', (tester) async {
+    var exits = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatPage(animate: false, onExit: () => exits++, onExplore: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chat-back')), findsNothing);
+    await tester.tap(find.text('跳过'));
+    expect(exits, 1);
+  });
+
   test('timestamps group at five minutes and preserve calendar dates', () {
     final now = DateTime(2026, 11, 16, 13, 15);
     expect(showChatTime(null, now), isTrue);

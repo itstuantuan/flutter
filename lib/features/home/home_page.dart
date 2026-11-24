@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -31,6 +33,7 @@ class HomePage extends StatefulWidget {
     required this.onVoice,
     required this.onDiscovery,
     this.onFriends,
+    this.onAllDiscoveries,
     this.hintUserId,
     this.discoveries = designDiscoveries,
     this.initialPage = 0,
@@ -38,6 +41,7 @@ class HomePage extends StatefulWidget {
   });
   final VoidCallback onMenu, onExplore, onChat, onVoice;
   final VoidCallback? onFriends;
+  final VoidCallback? onAllDiscoveries;
   final ValueChanged<int> onDiscovery;
   final List<HomeDiscovery> discoveries;
   final int initialPage;
@@ -181,7 +185,10 @@ class _HomePageState extends State<HomePage> {
                                   926.55,
                                 ),
                                 topExtension: sceneOffset,
-                                semanticLabel: 'ViiTor 在星空露台向你挥手',
+                                semanticLabel: translate(
+                                  context,
+                                  'ViiTor 在星空露台向你挥手',
+                                ),
                               ),
                             ),
                             Positioned(
@@ -276,7 +283,10 @@ class _HomePageState extends State<HomePage> {
                                     i++
                                   )
                                     Semantics(
-                                      label: '发现第 ${i + 1} 页',
+                                      label: translate(
+                                        context,
+                                        '发现第 ${i + 1} 页',
+                                      ),
                                       selected: i == _selected,
                                       button: true,
                                       child: HomePressFeedback(
@@ -339,10 +349,56 @@ class _HomePageState extends State<HomePage> {
                   height: 48,
                   child: HomePressFeedback(
                     child: IconButton(
-                      tooltip: '菜单',
+                      tooltip: translate(context, '菜单'),
                       onPressed: () => _act(widget.onMenu),
                       padding: EdgeInsets.zero,
                       icon: _svg('menu', 22.9583, 20.5417),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: safe.right + 16,
+                top: safe.top + 3,
+                child: TextButton(
+                  key: const ValueKey('all-discoveries'),
+                  onPressed: widget.onAllDiscoveries,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(88, 48),
+                    padding: EdgeInsets.zero,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(107),
+                      border: Border.all(color: const Color(0xFFCAADFB)),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x592D2039), Color(0x597D599F)],
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const AppText(
+                          '全部发现',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: .13,
+                          ),
+                        ),
+                        SvgPicture.asset(
+                          'assets/home/discoveries_chevron.svg',
+                          width: 14,
+                          height: 14,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -377,12 +433,12 @@ class _HomePageState extends State<HomePage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _ToolbarAction(
-                            label: '聊天',
+                            label: translate(context, '聊天'),
                             asset: 'chat',
                             onPressed: () => _act(widget.onChat),
                           ),
                           _ToolbarAction(
-                            label: '语音',
+                            label: translate(context, '语音'),
                             asset: 'microphone',
                             onPressed: () => _act(widget.onVoice),
                           ),
@@ -546,17 +602,7 @@ class _DiscoveryCard extends StatelessWidget {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: glass
-                    ? Semantics(
-                        label: '今日发现',
-                        child: Image.asset(
-                          'assets/design/card_glass_heading.png',
-                          width: 146,
-                          height: 28,
-                          excludeFromSemantics: true,
-                        ),
-                      )
-                    : const _DiscoveryHeading(),
+                child: const _DiscoveryHeading(),
               ),
               const SizedBox(height: 10.716),
               Padding(
@@ -599,7 +645,7 @@ class _DiscoveryCard extends StatelessWidget {
                       shape: const StadiumBorder(),
                       padding: EdgeInsets.zero,
                     ),
-                    child: const Text(
+                    child: const AppText(
                       '去看看',
                       style: TextStyle(
                         fontFamily: 'PingFang SC',
@@ -680,15 +726,21 @@ class _DiscoveryHeading extends StatelessWidget {
         Positioned(left: 26, top: 0, child: _svg('star_8', 8, 8)),
         const Positioned(
           left: 12,
+          right: 0,
           top: 8,
-          child: Text(
-            '今日发现',
-            style: TextStyle(
-              fontFamily: 'PingFang SC',
-              fontSize: 16,
-              height: 17 / 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
+          bottom: 0,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: AppText(
+              '今日发现',
+              style: TextStyle(
+                fontFamily: 'PingFang SC',
+                fontSize: 16,
+                height: 17 / 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -780,7 +832,7 @@ class _ToolbarAction extends StatelessWidget {
     height: 45,
     child: HomePressFeedback(
       child: IconButton(
-        tooltip: label,
+        tooltip: translate(context, label),
         onPressed: onPressed,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 45, minHeight: 45),
@@ -795,7 +847,7 @@ class _DiscoveryPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: '正在加载今日发现',
+    label: translate(context, '正在加载今日发现'),
     child: Container(
       key: const ValueKey('home-discoveries-loading'),
       margin: const EdgeInsets.symmetric(horizontal: 30),

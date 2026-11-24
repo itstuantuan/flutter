@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -41,12 +43,12 @@ class SettingsScaffold extends StatelessWidget {
           foregroundColor: Colors.white,
           centerTitle: true,
           toolbarHeight: 48,
-          title: Text(
+          title: AppText(
             title,
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
           ),
           leading: IconButton(
-            tooltip: '返回',
+            tooltip: translate(context, '返回'),
             onPressed: () => Navigator.maybePop(context),
             icon: settingsIcon('back', 24),
           ),
@@ -106,7 +108,7 @@ Future<String?> showSettingsChoices(
                 alignment: Alignment.center,
                 children: [
                   Center(
-                    child: Text(
+                    child: AppText(
                       title,
                       style: const TextStyle(
                         color: Colors.white,
@@ -122,7 +124,7 @@ Future<String?> showSettingsChoices(
                       height: 32,
                       child: IconButton(
                         padding: EdgeInsets.zero,
-                        tooltip: '关闭',
+                        tooltip: translate(context, '关闭'),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.white.withValues(alpha: .14),
                         ),
@@ -177,7 +179,7 @@ Future<String?> showSettingsChoices(
                                                 Color(0xFFC869FF),
                                               ],
                                             ).createShader(rect),
-                                        child: Text(
+                                        child: AppText(
                                           option,
                                           style: const TextStyle(
                                             color: Colors.white,
@@ -185,7 +187,7 @@ Future<String?> showSettingsChoices(
                                           ),
                                         ),
                                       )
-                                    : Text(
+                                    : AppText(
                                         option,
                                         style: const TextStyle(
                                           color: Colors.white,
@@ -235,7 +237,7 @@ class SettingsGradientButton extends StatelessWidget {
           width: double.infinity,
           height: 56,
           child: Center(
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(
                 color: Colors.white,

@@ -1,4 +1,5 @@
 import 'package:bots/features/plaza/plaza_discovery.dart';
+import 'package:bots/features/discoveries/discovery_detail_page.dart';
 import 'package:bots/features/plaza/plaza_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +32,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PlazaDiscoveryDialog), findsNothing);
     expect(find.text(discoveryFixtures[1].body), findsOneWidget);
-    await tester.tap(find.text('返回广场'));
+    expect(find.byType(DiscoveryDetailPage), findsOneWidget);
+    expect(find.text(discoveryFixtures[1].title), findsOneWidget);
+    await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     expect(find.byType(PlazaPage), findsOneWidget);
     expect(tester.takeException(), isNull);

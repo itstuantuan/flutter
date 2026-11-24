@@ -149,7 +149,7 @@ flutter run --dart-define-from-file=env/development.local.json
 
 ## Google 登录
 
-Demo 已增加原生 Google 登录按钮（iOS / Android），取得 Google ID Token 后经签名请求
+正式登录流程已接入 Google 登录页（iOS / Android），根据设备 Locale 的地区选择登录方式：`CN` 只显示手机号验证码，其他地区或地区为空时只显示 Google；与 App 内选择的界面语言无关。取得 Google ID Token 后经签名请求
 `/account/google_login` 换取账号系统会话。Google 用户无需绑定手机号。
 需提供 iOS OAuth Client ID 和服务器接受的 Web OAuth Client ID，当前值留空。
 VS Code 启动前自动生成 iOS 回调配置；命令行启动前需运行配置脚本。

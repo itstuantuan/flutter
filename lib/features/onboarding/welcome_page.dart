@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -127,7 +129,7 @@ class _WelcomePageState extends State<WelcomePage>
               horizontal: 22 * scale,
               vertical: 16 * scale,
             ),
-            child: const Text(
+            child: const AppText(
               '来啦~欢迎小宝加入',
               textAlign: TextAlign.center,
               style: TextStyle(

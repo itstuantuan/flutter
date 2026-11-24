@@ -64,7 +64,7 @@ void main() {
             find.byKey(const ValueKey('chat-transcript')),
           )
           .controller!;
-      expect(scroll.offset, greaterThan(0));
+      expect(scroll.offset, 0);
       expect(located, 1);
       expect(find.textContaining('完整后端汇总'), findsNothing);
       expect(
@@ -113,15 +113,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(located, 1);
       expect(
-        tester.widget<ChatBubble>(find.byType(ChatBubble)).highlightText,
-        '第一条发现',
+        tester
+            .widget<ChatDiscoveryCarousel>(find.byType(ChatDiscoveryCarousel))
+            .highlightedMaterialId,
+        'one',
       );
       await tester.pumpWidget(page('two'));
       await tester.pumpAndSettle();
       expect(located, 2);
       expect(
-        tester.widget<ChatBubble>(find.byType(ChatBubble)).highlightText,
-        '第二条发现',
+        tester
+            .widget<ChatDiscoveryCarousel>(find.byType(ChatDiscoveryCarousel))
+            .highlightedMaterialId,
+        'two',
       );
       expect(
         find.byKey(const ValueKey('chat-location-notice')),
@@ -131,7 +135,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('chat-location-notice')), findsNothing);
       expect(
-        tester.widget<ChatBubble>(find.byType(ChatBubble)).highlightText,
+        tester
+            .widget<ChatDiscoveryCarousel>(find.byType(ChatDiscoveryCarousel))
+            .highlightedMaterialId,
         isNull,
       );
       expect(tester.takeException(), isNull);
@@ -186,7 +192,7 @@ void main() {
       expect(controller.page, 2);
       final target = tester.getRect(find.text('第三条'));
       final viewport = tester.getRect(
-        find.byKey(const ValueKey('chat-transcript')),
+        find.byKey(const ValueKey('header-discoveries')),
       );
       expect(target.top, greaterThan(viewport.top));
       expect(target.bottom, lessThan(viewport.bottom));

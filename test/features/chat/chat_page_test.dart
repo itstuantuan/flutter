@@ -134,7 +134,7 @@ void main() {
     await tester.enterText(field, '你好');
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(tester.widget<TextField>(field).controller!.text, '你好');
     await tester.testTextInput.receiveAction(TextInputAction.send);
     expect(sendCount, 1);
@@ -195,7 +195,9 @@ void main() {
       'messageType': 'chat',
       'status': 'queued',
     };
-    controller.merge({'turns': [first]}, live: true);
+    controller.merge({
+      'turns': [first],
+    }, live: true);
     await tester.pump();
     expect(find.text('第一条消息'), findsOneWidget);
     expect(find.text('正在思考…'), findsOneWidget);
@@ -336,7 +338,7 @@ void main() {
   );
 
   testWidgets(
-    'text composer clears drafts and sends only through the keyboard',
+    'text composer switches between microphone and send and clears drafts',
     (tester) async {
       var sends = 0;
       await tester.pumpWidget(
@@ -357,7 +359,8 @@ void main() {
       await tester.enterText(find.byType(TextField), '要删除的文字');
       await tester.pump();
       expect(find.byTooltip('清空输入'), findsOneWidget);
-      expect(find.byType(ChatSendIcon), findsNothing);
+      expect(find.byType(ChatSendIcon), findsOneWidget);
+      expect(find.byTooltip('开始录音'), findsNothing);
       await tester.tap(find.byTooltip('清空输入'));
       await tester.pump();
       final field = tester.widget<TextField>(find.byType(TextField));
@@ -366,9 +369,12 @@ void main() {
       expect(find.byTooltip('清空输入'), findsNothing);
       expect(sends, 0);
       await tester.enterText(find.byType(TextField), '发送这句话');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      await tester.tap(find.byTooltip('发送'));
       await tester.pumpAndSettle();
       expect(sends, 1);
+      expect(find.byTooltip('开始录音'), findsOneWidget);
+      expect(find.byTooltip('发送'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     },

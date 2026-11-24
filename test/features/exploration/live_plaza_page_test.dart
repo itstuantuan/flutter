@@ -8,7 +8,7 @@ import 'fakes.dart';
 
 void main() {
   testWidgets(
-    'ready cards present in batches and completion does not replay them',
+    'late cards append to the open carousel, update dots and preserve the page',
     (tester) async {
       final service = FakeBotService();
       final controller = ExplorationController(
@@ -34,7 +34,7 @@ void main() {
             controller: controller,
             taskId: 'task-1',
             onChat: (_) async {},
-            onOpenDiscovery: (_, _) async {},
+            onOpenDiscovery: (_) async {},
           ),
         ),
       );
@@ -45,14 +45,49 @@ void main() {
           .discoveries
           .map((c) => c.materialId);
       expect(materials(), ['material-1']);
+      final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
+      Finder dot(int index, int count) => find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == '第 $index 条发现，共 $count 条',
+      );
+      expect(dot(1, 1), findsOneWidget);
+      expect(pages.viewportFraction, lessThan(1));
+      ready(2);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(materials(), ['material-1', 'material-2']);
+      double cardScale(int index) => tester
+          .widget<Transform>(
+            find.byKey(ValueKey('plaza-discovery-scale-$index')),
+          )
+          .transform
+          .entry(0, 0);
+      expect(cardScale(0), 1);
+      expect(cardScale(1), closeTo(.86, .001));
+      expect(pages.page, 0);
+      expect(dot(1, 2), findsOneWidget);
+      expect(dot(2, 2), findsOneWidget);
+      await tester.drag(find.byType(PageView), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
+      expect(cardScale(1), 1);
       ready(3);
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
-      expect(materials(), ['material-1']);
+      expect(materials(), ['material-1', 'material-2', 'material-3']);
+      expect(
+        tester.widget<PageView>(find.byType(PageView)).controller,
+        same(pages),
+      );
+      expect(pages.page, 1);
+      for (var i = 1; i <= 3; i++) {
+        expect(dot(i, 3), findsOneWidget);
+      }
       controller.receiveCompletion(completionEvent());
-      await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
-      expect(materials(), ['material-2', 'material-3']);
+      expect(materials(), ['material-1', 'material-2', 'material-3']);
+      expect(pages.page, 1);
       await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
       expect(dialog, findsNothing);
@@ -81,7 +116,7 @@ void main() {
             controller: controller,
             taskId: 'task-1',
             onChat: (_) async {},
-            onOpenDiscovery: (_, _) async {},
+            onOpenDiscovery: (_) async {},
           ),
         ),
       );
@@ -145,7 +180,9 @@ void main() {
             controller: controller,
             taskId: 'task-1',
             onChat: (_) async {},
-            onOpenDiscovery: (task, material) async {
+            onOpenDiscovery: (card) async {
+              final task = card['taskId'];
+              final material = card['materialId'];
               opened.add((task, material));
             },
           ),
@@ -216,7 +253,9 @@ void main() {
             controller: controller,
             taskId: 'task-1',
             onChat: (_) async {},
-            onOpenDiscovery: (task, material) async {
+            onOpenDiscovery: (card) async {
+              final task = card['taskId'];
+              final material = card['materialId'];
               opened.add((task, material));
             },
           ),

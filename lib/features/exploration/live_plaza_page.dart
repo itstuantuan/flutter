@@ -20,8 +20,7 @@ class LivePlazaPage extends StatefulWidget {
   final ExplorationController controller;
   final String? taskId;
   final Future<void> Function(bool voice) onChat;
-  final Future<void> Function(String taskId, String? materialId)
-  onOpenDiscovery;
+  final Future<void> Function(Map<String, dynamic> card) onOpenDiscovery;
   @override
   State<LivePlazaPage> createState() => _LivePlazaPageState();
 }
@@ -31,6 +30,7 @@ class _LivePlazaPageState extends State<LivePlazaPage>
   bool _showing = false, _scheduled = false;
   String? _terminalShown;
   String? _lastPresentedTask;
+  ValueNotifier<List<PlazaDiscovery>>? _dialogCards;
   final _presentedHere = <String>{};
   @override
   void initState() {
@@ -70,9 +70,12 @@ class _LivePlazaPageState extends State<LivePlazaPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
       if (!mounted ||
-          _showing ||
-          ModalRoute.of(context)?.isCurrent != true ||
+          (!_showing && ModalRoute.of(context)?.isCurrent != true) ||
           WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      if (_showing) {
+        _appendPendingCards();
         return;
       }
       final events = widget.controller.pendingEvents
@@ -121,22 +124,14 @@ class _LivePlazaPageState extends State<LivePlazaPage>
       }
       return;
     }
-    final discoveries = cards
-        .map(
-          (card) => PlazaDiscovery(
-            title: card['title'] as String? ?? '',
-            body:
-                card['content'] as String? ?? card['summary'] as String? ?? '',
-            category: (card['tags'] as List? ?? []).join(' · '),
-            coverUrl: card['coverUrl'] as String?,
-            materialId: card['materialId'] as String?,
-          ),
-        )
-        .toList();
+    final discoveries = cards.map(_discovery).toList();
+    final updates = ValueNotifier(discoveries);
+    _dialogCards = updates;
     try {
       final selected = await showPlazaDiscoveries(
         context,
         discoveries: discoveries,
+        updates: updates,
         onPresented: eventId == null
             ? null
             : () => unawaited(
@@ -145,17 +140,81 @@ class _LivePlazaPageState extends State<LivePlazaPage>
                     .catchError((Object e) => widget.controller.reportError(e)),
               ),
       );
+      _dialogCards = null;
       if (!mounted || selected == null) return;
       final taskId = event['taskId'] as String?;
       if (taskId == null || taskId.isEmpty) {
         _notice('这条发现缺少定位信息');
         return;
       }
-      await widget.onOpenDiscovery(taskId, selected.materialId);
+      final source = selected.sourceCard;
+      if (source == null) {
+        _notice('暂时无法读取这条发现，请稍后重试');
+        return;
+      }
+      await widget.onOpenDiscovery({...source, 'taskId': taskId});
     } finally {
+      _dialogCards = null;
+      updates.dispose();
       _showing = false;
       if (mounted) _refresh();
     }
+  }
+
+  PlazaDiscovery _discovery(Map card) => PlazaDiscovery(
+    sourceCard: Map<String, dynamic>.unmodifiable(Map<String, dynamic>.from(card)),
+    title: card['title'] as String? ?? '',
+    body: card['content'] as String? ?? card['summary'] as String? ?? '',
+    category: (card['tags'] as List? ?? []).join(' · '),
+    coverUrl: card['coverUrl'] as String?,
+    materialId: card['materialId'] as String?,
+  );
+
+  void _appendPendingCards() {
+    final updates = _dialogCards;
+    if (updates == null) return; // The user has opened a discovery detail.
+    final events = widget.controller.pendingEvents
+        .where(
+          (event) =>
+              event['taskId'] == _lastPresentedTask &&
+              !_presentedHere.contains(event['eventId']),
+        )
+        .toList();
+    if (events.isEmpty) return;
+    final cards = [...updates.value];
+    final known = cards
+        .map((card) => card.materialId)
+        .whereType<String>()
+        .toSet();
+    for (final event in events) {
+      final eventId = event['eventId'] as String;
+      _presentedHere.add(eventId);
+      for (final card in widget.controller.unseenCards(event)) {
+        final material = card['materialId'];
+        if (material is String && !known.add(material)) continue;
+        cards.add(_discovery(card));
+      }
+    }
+    updates.value = cards;
+    // Acknowledge only after the updated carousel and dots have rendered.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _dialogCards != updates) {
+        for (final event in events) {
+          _presentedHere.remove(event['eventId']);
+        }
+        if (mounted) _refresh();
+        return;
+      }
+      for (final event in events) {
+        unawaited(
+          widget.controller
+              .markDisplayed(event)
+              .catchError(
+                (Object error) => widget.controller.reportError(error),
+              ),
+        );
+      }
+    });
   }
 
   bool _loadingDiscovery = false;

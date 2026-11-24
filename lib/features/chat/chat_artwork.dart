@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 import 'dart:async';
 import 'dart:ui';
@@ -142,7 +144,7 @@ class ChatGreeting extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 79),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
-          child: Text(
+          child: AppText(
             '嗨!我是$name.很高兴见到你!\n在一起探索之前,我想先多了解你一点.',
             style: const TextStyle(
               inherit: false,
@@ -206,8 +208,8 @@ class _ChatExploreBannerState extends State<ChatExploreBanner> {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: '先去探索世界',
-    hint: widget.onDragUpdate != null ? '长按可上下拖动位置' : null,
+    label: translate(context, '先去探索世界'),
+    hint: widget.onDragUpdate != null ? translate(context, '长按可上下拖动位置') : null,
     child: ExcludeSemantics(
       child: GestureDetector(
         onTap: widget.onPressed,
@@ -303,17 +305,23 @@ class _ChatExploreBannerState extends State<ChatExploreBanner> {
                       const Positioned(
                         left: 33,
                         top: 14,
-                        child: Text(
-                          '先去探索世界',
-                          style: TextStyle(
-                            inherit: false,
-                            textBaseline: TextBaseline.alphabetic,
-                            fontFamily: 'PingFang SC',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 1,
-                            height: 1.25,
-                            color: Colors.white,
+                        width: 100,
+                        height: 22,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: AppText(
+                            '先去探索世界',
+                            style: TextStyle(
+                              inherit: false,
+                              textBaseline: TextBaseline.alphabetic,
+                              fontFamily: 'PingFang SC',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 1,
+                              height: 1.25,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),

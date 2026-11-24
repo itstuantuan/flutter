@@ -13,7 +13,7 @@ class PlazaScenario {
       .split('\n')
       .map((line) {
         final split = line.indexOf('：');
-    return split < 0 || line.startsWith('✦')
+        return split < 0 || line.startsWith('✦')
             ? PlazaLine('', line)
             : PlazaLine(line.substring(0, split), line.substring(split + 1));
       })

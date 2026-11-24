@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>用于你主动拍照更换头像。</string>
+	<string>Take a photo when you choose to change your profile picture.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>用于你主动选择头像或反馈截图。</string>
+	<string>Choose a profile picture or attach a feedback screenshot.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>将你主动输入的语音实时转为可编辑文字，确认后发送聊天；系统识别可能使用 Apple 的在线服务。</string>
+	<string>Turn speech you choose to enter into editable text for you to review and send. System recognition may use Apple online services.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>用于将你主动说的话转为聊天文字。</string>
+	<string>Turn speech you choose to enter into chat text.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

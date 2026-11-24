@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bots/features/auth/startup_profile_store.dart';
+import 'package:bots/features/onboarding/onboarding_flow.dart';
 
 import 'package:bots/core/network/api_client.dart';
 import 'package:bots/features/auth/account_service.dart';
@@ -95,6 +96,11 @@ Future<void> fillPhone(WidgetTester tester) async {
 }
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(
+    () => binding.platformDispatcher.localeTestValue = const Locale('zh', 'CN'),
+  );
+  tearDown(binding.platformDispatcher.clearLocaleTestValue);
   testWidgets('iOS phone input starts the connection before any SMS request', (
     tester,
   ) async {
@@ -212,6 +218,11 @@ void main() {
   testWidgets(
     'auth gate restores users, handles failure, and routes newly registered users',
     (tester) async {
+      tester.binding.platformDispatcher.accessibilityFeaturesTestValue =
+          FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.binding.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
       final service = FakePhoneAccount()..restored = testSession;
       Widget gate(int id) => MaterialApp(
         home: AuthGate(
@@ -253,6 +264,11 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('login-next')));
+      await tester.pumpAndSettle();
+      expect(find.byType(OnboardingFlow), findsOneWidget);
+      await tester
+          .widget<OnboardingFlow>(find.byType(OnboardingFlow))
+          .onAdvance!(null);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('login-name')), findsOneWidget);
       await tester.enterText(find.byKey(const ValueKey('login-name')), 'Test');

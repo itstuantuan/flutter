@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "用于你主动拍照更换头像。";
+"NSPhotoLibraryUsageDescription" = "用于你主动选择头像或反馈截图。";
+"NSSpeechRecognitionUsageDescription" = "将你主动输入的语音实时转为可编辑文字，确认后发送聊天；系统识别可能使用 Apple 的在线服务。";
+"NSMicrophoneUsageDescription" = "用于将你主动说的话转为聊天文字。";

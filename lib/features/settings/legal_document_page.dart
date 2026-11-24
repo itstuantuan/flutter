@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -45,12 +47,12 @@ class _LegalDocumentPageState extends State<LegalDocumentPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('${widget.title}加载失败，请重试。'),
+                AppText('${widget.title}加载失败，请重试。'),
                 TextButton(
                   onPressed: () => setState(() {
                     _content = rootBundle.loadString(widget.assetPath);
                   }),
-                  child: const Text('重试'),
+                  child: const AppText('重试'),
                 ),
               ],
             ),
@@ -81,7 +83,8 @@ class _LegalDocumentPageState extends State<LegalDocumentPage> {
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                             )
-                          : RegExp(r'^[一二三四五六七八九十]+\s').hasMatch(lines[i])
+                          : RegExp(r'^(?:[一二三四五六七八九十]+|[IVX]+)\s')
+                                .hasMatch(lines[i])
                           ? const TextStyle(
                               color: Colors.white,
                               fontSize: 18,

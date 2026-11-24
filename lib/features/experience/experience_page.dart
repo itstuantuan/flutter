@@ -1,9 +1,14 @@
+import '../settings/language_page.dart';
+import '../../core/localization/app_localizations.dart';
+import '../discoveries/discovery_detail_page.dart';
+
 import 'dart:async';
 
 import '../notifications/push_service.dart';
 import '../notifications/notification_discovery_page.dart';
 import '../shared/app_toast.dart';
 import '../home/home_page.dart';
+import '../discoveries/all_discoveries_page.dart';
 import '../home/home_sidebar.dart';
 import '../settings/settings_store.dart';
 import '../settings/profile_page.dart';
@@ -70,7 +75,7 @@ class _ExperiencePageState extends State<ExperiencePage>
 
   Future<void> _initializeBots() async {
     try {
-      final profile = await widget.profileStore.read();
+      final profile = await widget.profileStore.readUser(widget.userId);
       if (!mounted) return;
       final bots = ExplorationController(
         service: widget.chatService ?? ChatService.authenticated(_account),
@@ -231,7 +236,7 @@ class _ExperiencePageState extends State<ExperiencePage>
                         controller: bots,
                         taskId: task,
                         onChat: (voice) => _homeChat(record: voice),
-                        onOpenDiscovery: _openDiscoveryChat,
+                        onOpenDiscovery: _showDiscoveryDetail,
                       ),
                     ),
                   ),
@@ -313,7 +318,7 @@ class _ExperiencePageState extends State<ExperiencePage>
                   input.text = '聊聊「${flow.discoveryTitle(index)}」';
                   Navigator.pop(context);
                 },
-                child: const Text('带回聊天继续聊'),
+                child: const AppText('带回聊天继续聊'),
               ),
             ],
           ),
@@ -364,7 +369,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     final selection = await showGeneralDialog<String>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: '关闭侧栏',
+      barrierLabel: translate(context, '关闭侧栏'),
       barrierColor: Colors.black.withValues(alpha: .3),
       transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (drawerContext, animation, secondaryAnimation) =>
@@ -391,6 +396,10 @@ class _ExperiencePageState extends State<ExperiencePage>
     );
     if (!mounted || selection == null) return;
     switch (selection) {
+      case 'history':
+        await _allDiscoveries();
+      case 'language':
+        await _selectLanguage();
       case 'interests':
         await _sidebarInterests();
       case 'profile':
@@ -433,6 +442,10 @@ class _ExperiencePageState extends State<ExperiencePage>
         await _sidebarInfo('关于我们', 'Pals\n让陪伴与灵感融入每一天。\n\n版本 0.1.0');
     }
   }
+
+  Future<void> _selectLanguage() => Navigator.of(context).push<void>(
+    MaterialPageRoute(builder: (_) => const LanguagePage()),
+  );
 
   Future<void> _sidebarInterests() async {
     try {
@@ -479,14 +492,14 @@ class _ExperiencePageState extends State<ExperiencePage>
       builder: (pageContext) => Scaffold(
         backgroundColor: const Color(0xFF33303B),
         appBar: AppBar(
-          title: Text(title),
+          title: AppText(title),
           backgroundColor: const Color(0xFF33303B),
           foregroundColor: Colors.white,
         ),
         body: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text(
+            AppText(
               message,
               style: const TextStyle(
                 color: Colors.white,
@@ -497,7 +510,10 @@ class _ExperiencePageState extends State<ExperiencePage>
             const SizedBox(height: 24),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('服务协议', style: TextStyle(color: Colors.white)),
+              title: const AppText(
+                '服务协议',
+                style: TextStyle(color: Colors.white),
+              ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white70),
               onTap: () => Navigator.of(pageContext).push<void>(
                 MaterialPageRoute(builder: (_) => const ServiceAgreementPage()),
@@ -505,7 +521,10 @@ class _ExperiencePageState extends State<ExperiencePage>
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('隐私政策', style: TextStyle(color: Colors.white)),
+              title: const AppText(
+                '隐私政策',
+                style: TextStyle(color: Colors.white),
+              ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white70),
               onTap: () => Navigator.of(pageContext).push<void>(
                 MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
@@ -521,6 +540,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     bool record = false,
     String? taskId,
     String? materialId,
+    Map<String, dynamic>? referenceCard,
   }) async {
     if (_real) {
       try {
@@ -538,7 +558,9 @@ class _ExperiencePageState extends State<ExperiencePage>
                 accountService: _account,
                 controller: _bots?.chat,
                 taskId: taskId,
+                discoveryCards: _bots?.cards ?? const [],
                 materialId: materialId,
+                referenceCard: referenceCard,
                 onDiscoveryVisible: _discoveryVisible,
                 initialDraft: input.text,
                 startRecordingOnOpen: record,
@@ -549,6 +571,7 @@ class _ExperiencePageState extends State<ExperiencePage>
                 listenable: flow,
                 builder: (_, _) => ChatPage(
                   name: flow.character.name,
+                  referenceCard: referenceCard,
                   returningUser: true,
                   messages: flow.chatMessages,
                   busy: flow.busy,
@@ -676,7 +699,7 @@ class _ExperiencePageState extends State<ExperiencePage>
               controller: bots,
               taskId: task,
               onChat: (voice) => _homeChat(record: voice),
-              onOpenDiscovery: _openDiscoveryChat,
+              onOpenDiscovery: _showDiscoveryDetail,
             );
           },
         ),
@@ -689,8 +712,64 @@ class _ExperiencePageState extends State<ExperiencePage>
     }
   }
 
-  Future<void> _openDiscoveryChat(String taskId, String? materialId) =>
-      _homeChat(taskId: taskId, materialId: materialId);
+  Future<void> _showDiscoveryDetail(Map<String, dynamic> card) async {
+    final quote = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => DiscoveryDetailPage(
+          card: card,
+          history: _bots?.cards ?? [card],
+          service: _bots?.service,
+        ),
+      ),
+    );
+    if (!mounted || quote == null) return;
+    await _homeChat(
+      taskId: (quote['_chatTaskId'] ?? quote['taskId']) as String?,
+      materialId: quote['materialId'] as String?,
+      referenceCard: quote,
+    );
+  }
+
+  Future<void> _allDiscoveries() async {
+    if (_real) {
+      try {
+        await _readyBots();
+      } catch (_) {
+        if (mounted) _notice('发现暂时无法加载，请稍后重试');
+        return;
+      }
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => AllDiscoveriesPage(
+          service: _real ? _bots?.service : null,
+          cards: _real
+              ? _bots?.cards ?? []
+              : [
+                  for (var i = 0; i < flow.discoveryCount; i++)
+                    {
+                      'title': flow.discoveryTitle(i),
+                      'summary': flow.discoveryBody(i),
+                      '_index': i,
+                    },
+                ],
+          onOpen: (card) async {
+            if (_real) {
+              final task = card['taskId'];
+              if (task is String && task.isNotEmpty) {
+                await _showDiscoveryDetail(card);
+              } else {
+                _notice('这条发现缺少定位信息');
+              }
+            } else {
+              await _homeDiscovery(card['_index'] as int);
+            }
+          },
+        ),
+      ),
+    );
+  }
 
   Future<void> _homeDiscovery(int index) async {
     if (_real) {
@@ -702,12 +781,14 @@ class _ExperiencePageState extends State<ExperiencePage>
         _notice('这条发现缺少定位信息');
         return;
       }
-      await _openDiscoveryChat(task, card['materialId'] as String?);
+      await _showDiscoveryDetail(card);
       return;
     }
     if (flow.discoveryCount > index) {
-      await detail(index);
-      if (mounted && input.text.isNotEmpty) await _homeChat();
+      await _showDiscoveryDetail({
+        'title': flow.discoveryTitle(index),
+        'summary': flow.discoveryBody(index),
+      });
       return;
     }
     await Navigator.of(context).push(
@@ -756,6 +837,7 @@ class _ExperiencePageState extends State<ExperiencePage>
           onChat: _homeChat,
           onVoice: () => _homeChat(record: true),
           onDiscovery: _homeDiscovery,
+          onAllDiscoveries: _allDiscoveries,
           loadingDiscoveries: _real && (_bots?.loadingCards ?? true),
           discoveries: _real
               ? [

@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -291,7 +293,7 @@ class _SplashPreviewPageState extends State<SplashPreviewPage>
         height: 38,
         child: FloatingActionButton.small(
           heroTag: 'splash-replay',
-          tooltip: '重播入场动画',
+          tooltip: translate(context, '重播入场动画'),
           backgroundColor: const Color(0x55412087),
           elevation: 0,
           onPressed: () {

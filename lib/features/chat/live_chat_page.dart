@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -26,8 +28,12 @@ class LiveChatPage extends StatefulWidget {
     this.taskId,
     this.materialId,
     this.onDiscoveryVisible,
+    this.discoveryCards = const [],
+    this.referenceCard,
   }) : assert(controller == null || createController == null);
   final VoidCallback onExit, onExplore;
+  final List<Map<String, dynamic>> discoveryCards;
+  final Map<String, dynamic>? referenceCard;
   final AccountService accountService;
   final bool returningUser, startRecordingOnOpen;
   final String initialDraft;
@@ -47,6 +53,7 @@ class _LiveChatPageState extends State<LiveChatPage>
   ChatController? _chat;
   bool _foreground = true;
   String? _error;
+  late Map<String, dynamic>? _reference = widget.referenceCard;
   String? _controllerLoadError;
 
   @override
@@ -61,6 +68,13 @@ class _LiveChatPageState extends State<LiveChatPage>
       if (widget.controller != null) {
         _chat = widget.controller!..addListener(_refresh);
         _chat!.clearLocation();
+        if (_reference != null) {
+          // This controller may also be observed by the underlying home route.
+          // Notify only after mounting the chat route has finished.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _chat!.referenceDiscovery(_reference);
+          });
+        }
         if (widget.taskId != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
@@ -85,14 +99,15 @@ class _LiveChatPageState extends State<LiveChatPage>
         if (_foreground) unawaited(_chat!.start());
         return;
       }
-      final profile = await const StartupProfileStore().read();
-      if (!mounted) return;
+      final session = widget.accountService.session;
+      if (session == null) throw StateError('请先登录');
+      final profile = await const StartupProfileStore().readUser(session.uid);
+      if (!mounted || !identical(widget.accountService.session, session)) {
+        return;
+      }
       _chat = ChatController(
-        ChatService.authenticated(widget.accountService),
-        displayName:
-            profile['name'] as String? ??
-            widget.accountService.session?.nick ??
-            '',
+        ChatService.forSession(session),
+        displayName: profile['name'] as String? ?? session.nick,
         onUnauthorized: () async {
           await widget.accountService.logout();
           if (!mounted) return;
@@ -162,7 +177,15 @@ class _LiveChatPageState extends State<LiveChatPage>
         widget.createController != null && _chat == null;
     final chat = ChatPage(
       returningUser: widget.returningUser,
+      referenceCard: _reference,
+      discoveryService: _chat?.service,
+      onReferenceChanged: (card) {
+        setState(() => _reference = card);
+        _chat?.referenceDiscovery(card);
+      },
       messages: _chat?.messages ?? const [],
+      discoveryCards: widget.discoveryCards,
+      discoverySnapshotReady: _chat != null && !_chat!.loading,
       busy:
           widget.busy ||
           (_chat?.sending ?? false) ||
@@ -211,7 +234,7 @@ class _LiveChatPageState extends State<LiveChatPage>
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
+                        AppText(
                           _controllerLoadError!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.white),
@@ -219,7 +242,7 @@ class _LiveChatPageState extends State<LiveChatPage>
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: _retryController,
-                          child: const Text('重试'),
+                          child: const AppText('重试'),
                         ),
                       ],
                     ),

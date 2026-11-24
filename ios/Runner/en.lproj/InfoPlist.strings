@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Take a photo when you choose to change your profile picture.";
+"NSPhotoLibraryUsageDescription" = "Choose a profile picture or attach a feedback screenshot.";
+"NSSpeechRecognitionUsageDescription" = "Turn speech you choose to enter into editable text for you to review and send. System recognition may use Apple online services.";
+"NSMicrophoneUsageDescription" = "Turn speech you choose to enter into chat text.";

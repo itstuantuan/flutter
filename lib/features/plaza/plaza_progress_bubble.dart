@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -83,7 +85,7 @@ class PlazaProgressBubble extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        child: Text(
+                        child: AppText(
                           title,
                           style: const TextStyle(
                             fontFamily: 'PingFang SC',
@@ -97,7 +99,7 @@ class PlazaProgressBubble extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(
+                  AppText(
                     detail,
                     style: const TextStyle(
                       fontFamily: 'PingFang SC',

@@ -2,7 +2,7 @@
 
 ## 已实现的流程
 
-Demo 首页已有「使用 Google 账号登录」按钮，当前接入 iOS / Android 原生授权。
+正式登录流程已接入 Figma 551:3679 的 Google 登录页，支持 iOS / Android 原生授权。读取设备 `PlatformDispatcher.locale.countryCode` 并转为大写：`CN` 只显示手机号＋验证码，其他地区（包括 HK、MO、TW）或地区为空时只显示 Google 登录，不提供相互切换入口。通过 `WidgetsBinding.instance.platformDispatcher` 读取设备值以支持测试，不读取 `MaterialApp` 的界面语言。登录入口在当前 AuthGate 生命周期内保持稳定，修改设备地区后请重启 App。此字段代表设备 Locale，不是实际位置或 App Store 账号地区。登录成功后共用 AuthGate 的会话恢复、新用户命名及首次聊天引导。取消授权停留在登录页，失败可重试，授权期间禁用重复提交。
 Flutter Web、桌面端未接入此按钮的授权流程，点击会给出明确提示，不回退到 WebView。
 
 1. 用户点击按钮，校验当前产品/平台签名配置和 Google OAuth Client ID。
@@ -106,7 +106,9 @@ python3 scripts/configure_google_sign_in.py --config env/development.local.json
 flutter run --dart-define-from-file=env/development.local.json
 ```
 
-添加插件或修改 OAuth 配置后需停止并重新构建，不能只热重载。
+测试时在设备设置中切换地区并重启 App：中国大陆应显示手机号验证码，美国等其他地区应显示 Google。App 内切换中文／英文不会改变登录方式。不再需要 `APP_MARKET` 构建参数。
+
+修改插件或 OAuth 配置后需停止并重新构建，不能只热重载。
 直接在 Xcode 构建时，先运行配置脚本和对应 Flutter 构建命令，保证 Generated.xcconfig 中的 Dart defines 正确。
 不要在同一工作区并行构建使用不同 Google Client ID 的环境，以免生成的 iOS 配置相互覆盖。
 

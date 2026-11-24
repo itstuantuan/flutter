@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,8 +15,13 @@ Widget loginSvg(String name, {required double width, required double height}) =>
 
 /// Original Figma artwork placed in its 375px design viewport.
 class PhoneLoginArtwork extends StatelessWidget {
-  const PhoneLoginArtwork({super.key, required this.codeStep});
+  const PhoneLoginArtwork({
+    super.key,
+    required this.codeStep,
+    this.google = false,
+  });
   final bool codeStep;
+  final bool google;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
@@ -104,7 +111,7 @@ class PhoneLoginArtwork extends StatelessWidget {
     ).createShader(Rect.fromLTWH(0, -1, rect.width, 309)),
     child: Stack(
       children: [
-        for (final card in _loginCards)
+        for (final card in google ? _googleCards : _loginCards)
           Positioned(
             left: card.x,
             top: card.y,
@@ -112,7 +119,10 @@ class PhoneLoginArtwork extends StatelessWidget {
             height: card.h,
             child: Center(
               child: Transform.rotate(
-                angle: -6.63 * math.pi / 180,
+                angle:
+                    (google && card.avatar == 'wang' ? -6.97 : -6.63) *
+                    math.pi /
+                    180,
                 child: Container(
                   width: card.textWidth + 76,
                   height: 71,
@@ -149,22 +159,22 @@ class PhoneLoginArtwork extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            AppText(
                               card.name,
                               textScaler: TextScaler.noScaling,
                               maxLines: 1,
                               overflow: TextOverflow.clip,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 inherit: false,
                                 fontFamily: 'PingFang SC',
                                 fontSize: 14,
                                 height: 16 / 14,
-                                letterSpacing: 1,
+                                letterSpacing: google ? 0 : 1,
                                 color: Color(0xFF9B9CA1),
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
+                            AppText(
                               card.topic,
                               textScaler: TextScaler.noScaling,
                               maxLines: 1,
@@ -175,7 +185,7 @@ class PhoneLoginArtwork extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                                 fontSize: 14,
                                 height: 17 / 14,
-                                letterSpacing: 1,
+                                letterSpacing: google ? 0 : 1,
                                 color: card.color,
                               ),
                             ),
@@ -280,6 +290,108 @@ const _loginCards = [
     avatar: 'jiang',
     name: '酱酱在逛',
     topic: '如何上班摸鱼',
+    color: Color(0xFFE4D4F5),
+  ),
+  (
+    x: -215.58,
+    y: 49.37,
+    w: 241.855,
+    h: 99.636,
+    textWidth: 159.0,
+    avatar: 'other',
+    name: '康康在逛',
+    topic: '咖啡店老板约周五social',
+    color: Color(0xFFF8F6D7),
+  ),
+];
+
+const _googleCards = [
+  (
+    x: 152.41,
+    y: 163.0,
+    w: 353.19,
+    h: 112.573,
+    textWidth: 271.084,
+    avatar: 'fish',
+    name: 'Xiaoyu is Exploring',
+    topic: 'What Are Cats Really Thinking?',
+    color: Color(0xFFF8F6D7),
+  ),
+  (
+    x: -306.0,
+    y: 226.65,
+    w: 247.815,
+    h: 100.328,
+    textWidth: 165.0,
+    avatar: 'other',
+    name: '可乐在逛',
+    topic: '如果明天不用上班会怎样',
+    color: Color(0xFFF8F6D7),
+  ),
+  (
+    x: 227.14,
+    y: 58.93,
+    w: 416.719,
+    h: 122.329,
+    textWidth: 334.897,
+    avatar: 'wang',
+    name: 'Wangzai is Exploring',
+    topic: 'Talking Childhood Memories with Strangers',
+    color: Color(0xFFE4D4F5),
+  ),
+  (
+    x: -57.0,
+    y: 207.0,
+    w: 207.049,
+    h: 95.592,
+    textWidth: 123.96,
+    avatar: 'qixi',
+    name: 'Qixi is Exploring',
+    topic: 'Late-Night Gossip',
+    color: Color(0xFFF8F6D7),
+  ),
+  (
+    x: -38.12,
+    y: 110.56,
+    w: 264.751,
+    h: 102.296,
+    textWidth: 182.05,
+    avatar: 'abu',
+    name: 'Abu is Exploring',
+    topic: 'A Stranger-Watching Diary',
+    color: Color(0xFFF8F6D7),
+  ),
+  (
+    x: -275.29,
+    y: 141.72,
+    w: 233.909,
+    h: 98.712,
+    textWidth: 151.0,
+    avatar: 'other',
+    name: '糯米在逛',
+    topic: '今天的打工人又崩溃了',
+    color: Color(0xFFDAF3F7),
+  ),
+  (
+    x: 289.0,
+    y: -12.0,
+    w: 218.015,
+    h: 96.866,
+    textWidth: 135.0,
+    avatar: 'duck',
+    name: '卷饼鸭鸭在逛',
+    topic: 'Hoat Work',
+    color: Color(0xFFDAF3F7),
+  ),
+  (
+    x: 29.54,
+    y: 16.8,
+    w: 259.662,
+    h: 101.705,
+    textWidth: 176.926,
+    avatar: 'jiang',
+    name: 'Nana is Exploring',
+    topic: 'How to Slack Off at Work',
     color: Color(0xFFE4D4F5),
   ),
   (

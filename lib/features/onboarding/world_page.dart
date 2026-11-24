@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 
 import 'onboarding_scaffold.dart';
@@ -95,7 +97,7 @@ class WorldPage extends StatelessWidget {
                               ),
                               const SizedBox(width: 2),
                               const Expanded(
-                                child: Text(
+                                child: AppText(
                                   '欢迎Viitor进入创作广场',
                                   style: TextStyle(
                                     fontFamily: 'PingFang SC',
@@ -198,7 +200,7 @@ class _ConversationLine extends StatelessWidget {
       ),
       const SizedBox(width: 6),
       Expanded(
-        child: Text(
+        child: AppText(
           message,
           style: const TextStyle(
             fontFamily: 'PingFang SC',

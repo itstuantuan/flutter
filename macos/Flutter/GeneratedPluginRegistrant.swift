@@ -12,6 +12,7 @@ import flutter_secure_storage_darwin
 import google_sign_in_ios
 import record_darwin
 import speech_to_text
+import video_player_avfoundation
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))
@@ -21,4 +22,5 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   GoogleSignInPlugin.register(with: registry.registrar(forPlugin: "GoogleSignInPlugin"))
   RecordDarwinPlugin.register(with: registry.registrar(forPlugin: "RecordDarwinPlugin"))
   SpeechToTextPlugin.register(with: registry.registrar(forPlugin: "SpeechToTextPlugin"))
+  VideoPlayerPlugin.register(with: registry.registrar(forPlugin: "VideoPlayerPlugin"))
 }

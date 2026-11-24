@@ -37,7 +37,7 @@ void main() {
     await tester.tap(find.text('第一条发现'));
     await tester.pumpAndSettle();
     expect(find.text('第一条的完整正文'), findsOneWidget);
-    await tester.tapAt(const Offset(10, 100));
+    await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(PageView), const Offset(-300, 0));
     await tester.pumpAndSettle();

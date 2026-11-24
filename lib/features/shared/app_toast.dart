@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -85,7 +87,7 @@ class _AppToastState extends State<_AppToast> {
                 ),
                 child: Semantics(
                   liveRegion: true,
-                  child: Text(
+                  child: AppText(
                     widget.message,
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white, fontSize: 14),

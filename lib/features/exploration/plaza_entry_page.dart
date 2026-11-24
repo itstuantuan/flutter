@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'package:flutter/material.dart';
 
 import '../plaza/plaza_page.dart';
@@ -81,7 +83,7 @@ class _PlazaEntryPageState extends State<PlazaEntryPage> {
                       const SizedBox(width: 12),
                     ],
                     Expanded(
-                      child: Text(
+                      child: AppText(
                         _loading ? '正在准备探索…' : '探索加载失败，请重试',
                         style: const TextStyle(
                           color: Colors.white,
@@ -92,7 +94,7 @@ class _PlazaEntryPageState extends State<PlazaEntryPage> {
                     if (!_loading)
                       TextButton(
                         onPressed: _prepare,
-                        child: const Text(
+                        child: const AppText(
                           '重试',
                           style: TextStyle(color: Colors.white),
                         ),

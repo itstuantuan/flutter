@@ -25,6 +25,7 @@ class ChatMessage {
   const ChatMessage(
     this.text, {
     this.isUser = false,
+    this.isInterfaceText = false,
     this.voice,
     this.turnId,
     this.referenceTaskId,
@@ -36,6 +37,9 @@ class ChatMessage {
   });
   final String text;
   final bool isUser;
+
+  /// Only app-generated status copy is localized; conversation content is verbatim.
+  final bool isInterfaceText;
   final VoiceClip? voice;
   // Server identity is retained for navigation; a discovery stays one turn.
   final int? turnId;
@@ -65,6 +69,7 @@ class ChatMessage {
   factory ChatMessage.fromJson(Map<String, dynamic> value) => ChatMessage(
     value['text'] as String? ?? '',
     isUser: value['isUser'] == true,
+    isInterfaceText: value['isInterfaceText'] == true,
     createdAt: value['createdAt'] is int
         ? DateTime.fromMillisecondsSinceEpoch(value['createdAt'] as int)
         : null,
@@ -76,6 +81,7 @@ class ChatMessage {
   Map<String, dynamic> toJson() => {
     'text': text,
     'isUser': isUser,
+    if (isInterfaceText) 'isInterfaceText': true,
     if (createdAt != null) 'createdAt': createdAt!.millisecondsSinceEpoch,
     if (voice != null) 'voice': voice!.toJson(),
   };

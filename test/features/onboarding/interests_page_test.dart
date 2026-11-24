@@ -4,6 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('name keyboard opens after the entrance and stays dismissed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: NamePage(onContinue: (_) async {})),
+    );
+    await tester.pump(const Duration(milliseconds: 1000));
+    expect(tester.testTextInput.isVisible, isFalse);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isTrue);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
   testWidgets('bubbles float, stay tappable and respect reduced motion', (
     tester,
   ) async {
@@ -101,6 +117,8 @@ void main() {
         const Size(414, 736),
         const Size(320, 568),
         const Size(812, 375),
+        const Size(402, 874),
+        const Size(768, 1024),
       ]) {
         tester.view.physicalSize = size;
         for (final scale in [1.0, 2.0]) {
@@ -113,7 +131,9 @@ void main() {
                     size: size,
                     disableAnimations: true,
                     textScaler: TextScaler.linear(scale),
-                    padding: const EdgeInsets.only(top: 20, bottom: 20),
+                    padding: size == const Size(402, 874)
+                        ? const EdgeInsets.only(top: 62, bottom: 34)
+                        : const EdgeInsets.only(top: 20, bottom: 20),
                     viewInsets: EdgeInsets.only(bottom: keyboard),
                   ),
                   child: name

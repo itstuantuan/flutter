@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -25,49 +27,58 @@ class HomeSidebar extends StatelessWidget {
 
   Widget _arrow() =>
       SvgPicture.asset('assets/sidebar/chevron.svg', width: 16, height: 16);
-  Widget _row(
-    String id,
-    String label,
-    String asset, {
-    bool badge = false,
-  }) => InkWell(
-    onTap: () => onSelect(id),
-    borderRadius: BorderRadius.circular(16),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          SvgPicture.asset('assets/sidebar/$asset.svg', width: 22, height: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                height: 23 / 15,
+  Widget _row(String id, String label, String asset, {bool badge = false}) =>
+      InkWell(
+        onTap: () => onSelect(id),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              asset == 'history' || asset == 'language'
+                  ? Icon(
+                      asset == 'history' ? Icons.history : Icons.language,
+                      size: 22,
+                      color: Colors.white,
+                    )
+                  : SvgPicture.asset(
+                      'assets/sidebar/$asset.svg',
+                      width: 22,
+                      height: 22,
+                    ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppText(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 23 / 15,
+                  ),
+                ),
               ),
-            ),
+              if (badge && unreadCount > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF5454),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+              _arrow(),
+            ],
           ),
-          if (badge && unreadCount > 0) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF5454),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                unreadCount > 99 ? '99+' : '$unreadCount',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
-            const SizedBox(width: 4),
-          ],
-          _arrow(),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
   Widget _group(List<Widget> children, {double opacity = .06}) => Material(
     color: Colors.white.withValues(alpha: opacity),
     borderRadius: BorderRadius.circular(16),
@@ -138,7 +149,9 @@ class HomeSidebar extends StatelessWidget {
                                     const SizedBox(width: 6),
                                     Flexible(
                                       child: Text(
-                                        name.isEmpty ? '我的资料' : name,
+                                        name.isEmpty
+                                            ? translate(context, '我的资料')
+                                            : name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
@@ -163,6 +176,8 @@ class HomeSidebar extends StatelessWidget {
                                 badge: true,
                               ),
                               _row('interests', '兴趣选择', 'interests'),
+                              _row('history', '历史发现', 'history'),
+                              _row('language', '语言', 'language'),
                             ], opacity: .08),
                             const SizedBox(height: 20),
                             _group([_row('about', '关于我们', 'about')]),

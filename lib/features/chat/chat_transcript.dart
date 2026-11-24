@@ -45,6 +45,7 @@ List<ChatTranscriptEntry> chatTranscriptEntries(List<ChatMessage> messages) {
       if (cards.isEmpty) continue;
       message = ChatMessage(
         source.text,
+        isInterfaceText: source.isInterfaceText,
         turnId: source.turnId,
         referenceTaskId: source.referenceTaskId,
         cards: cards,

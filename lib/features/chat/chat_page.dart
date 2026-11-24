@@ -1,12 +1,16 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'chat_artwork.dart';
 import 'chat_discovery_carousel.dart';
+import 'discovery_inbox.dart';
+import 'discovery_reference.dart';
+import 'chat_service.dart';
 
 import 'chat_message.dart';
 import 'chat_time.dart';
@@ -25,6 +29,11 @@ class ChatPage extends StatefulWidget {
     required this.onExit,
     required this.onExplore,
     this.messages = const [],
+    this.discoveryCards = const [],
+    this.discoverySnapshotReady = true,
+    this.referenceCard,
+    this.discoveryService,
+    this.onReferenceChanged,
     this.onSend,
     this.onVoiceRecorded,
     this.voiceCapture,
@@ -61,6 +70,11 @@ class ChatPage extends StatefulWidget {
   final bool loadingOlderMessages;
   final VoidCallback onExit, onExplore;
   final List<ChatMessage> messages;
+  final List<Map<String, dynamic>> discoveryCards;
+  final bool discoverySnapshotReady;
+  final Map<String, dynamic>? referenceCard;
+  final ChatService? discoveryService;
+  final ValueChanged<Map<String, dynamic>?>? onReferenceChanged;
   final FutureOr<bool> Function(String text)? onSend;
   final Future<bool> Function(VoiceClip clip)? onVoiceRecorded;
   final bool useSystemDictation;
@@ -77,7 +91,7 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   late final _input = TextEditingController(text: widget.initialDraft);
   final _focus = FocusNode();
   final _scroll = ScrollController();
@@ -95,10 +109,127 @@ class _ChatPageState extends State<ChatPage>
   bool _sendingRecording = false;
   final _turnKeys = <int, GlobalKey>{};
   final _textKeys = <int, GlobalKey>{};
-  final _discoveryKeys = <int, GlobalKey<ChatDiscoveryCarouselState>>{};
+  final _headerDiscoveryKey = GlobalKey<ChatDiscoveryCarouselState>();
   Timer? _highlightTimer;
   Offset _exploreBannerOffset = Offset.zero;
   bool _exploreBannerCollapsed = false;
+  bool _discoveriesExpanded = false;
+  late Map<String, dynamic>? _reference = widget.referenceCard;
+
+  void _referenceDiscovery(Map<String, dynamic>? card) {
+    setState(() => _reference = card);
+    widget.onReferenceChanged?.call(card);
+    if (card != null) _focus.requestFocus();
+  }
+
+  final _inbox = DiscoveryInbox();
+  Timer? _arrivalBatch, _hintTimer;
+  bool _showNewHint = false, _cardInteracting = false, _deferredArrival = false;
+  bool _inForeground = true;
+  int _arrivalRevision = 0;
+  late final _arrival = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+    value: 1,
+  );
+  bool get _protectReading =>
+      _focus.hasFocus ||
+      _input.text.trim().isNotEmpty ||
+      _cardInteracting ||
+      _recording ||
+      _dictating ||
+      _busy ||
+      !_inForeground ||
+      ModalRoute.of(context)?.isCurrent == false;
+  bool get _reduceMotion =>
+      !widget.animate || MediaQuery.disableAnimationsOf(context);
+  List<Map<String, dynamic>> get _headerDiscoveries => _inbox.visible;
+
+  List<Map<String, dynamic>> get _availableDiscoveries {
+    final seen = <(Object?, Object?)>{};
+    return [
+      for (final card in [
+        for (final message in _messages.reversed)
+          for (final card in message.cards)
+            {
+              ...card,
+              '_chatTurnId': message.turnId,
+              '_chatTaskId': message.referenceTaskId,
+            },
+        for (final card in widget.discoveryCards)
+          {...card, '_chatTaskId': card['taskId']},
+      ])
+        if (seen.add((card['_chatTaskId'], card['materialId'] ?? card)))
+          {
+            ...card,
+            'summary':
+                card['summary'] ??
+                card['content'] ??
+                card['text'] ??
+                card['reason'] ??
+                '',
+          },
+    ];
+  }
+
+  void _queueArrival() {
+    _deferredArrival = _deferredArrival || _protectReading;
+    if (_arrivalBatch != null) return;
+    _arrivalBatch = Timer(const Duration(milliseconds: 600), () {
+      _arrivalBatch = null;
+      if (!mounted || !_inbox.pending) return;
+      if (_discoveriesExpanded && !_protectReading && !_deferredArrival) {
+        _applyArrivals();
+      } else {
+        setState(() => _showNewHint = true);
+        if (!_reduceMotion) _arrival.forward(from: 0);
+        _hintTimer?.cancel();
+        _hintTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) setState(() => _showNewHint = false);
+        });
+      }
+    });
+  }
+
+  void _applyArrivals() {
+    _arrivalBatch?.cancel();
+    _arrivalBatch = null;
+    _hintTimer?.cancel();
+    _focus.unfocus();
+    setState(() {
+      _inbox.apply();
+      _discoveriesExpanded = true;
+      _showNewHint = false;
+      _deferredArrival = false;
+      _arrivalRevision++;
+    });
+    if (_reduceMotion) {
+      _arrival.value = 1;
+    } else {
+      _arrival.forward(from: 0);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final first = _headerDiscoveries.firstOrNull;
+      if (first != null) {
+        await _headerDiscoveryKey.currentState?.revealMaterial(
+          first['materialId'] as String?,
+          turnId: first['_chatTurnId'] as int?,
+        );
+      }
+      if (mounted) _scheduleVisible();
+    });
+  }
+
+  void _toggleDiscoveries() {
+    if (!_discoveriesExpanded && _inbox.pending) {
+      _applyArrivals();
+    } else {
+      setState(() => _discoveriesExpanded = !_discoveriesExpanded);
+      if (_discoveriesExpanded) _scheduleVisible();
+    }
+  }
+
   late final _focusPulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2400),
@@ -122,15 +253,12 @@ class _ChatPageState extends State<ChatPage>
     ...widget.onSend == null ? _localMessages : widget.messages,
     ..._ephemeralMessages,
   ];
-  List<ChatTranscriptEntry> get _entries => chatTranscriptEntries(_messages);
-
-  int? _renderedTurnId(int? turnId) =>
-      _entries
-          .where((entry) => entry.containsTurn(turnId))
-          .firstOrNull
-          ?.message
-          .turnId ??
-      turnId;
+  // Discovery turns live in the header only, including their timestamps.
+  List<ChatTranscriptEntry> get _entries => chatTranscriptEntries(
+    _messages
+        .where((message) => message.isUser || message.cards.isEmpty)
+        .toList(),
+  );
 
   bool get _busy =>
       _dictationSendPending ||
@@ -148,6 +276,13 @@ class _ChatPageState extends State<ChatPage>
     _voice.addListener(_refreshVoice);
     if (widget.useSystemDictation) _dictation.addListener(_refreshDictation);
     _scroll.addListener(_scheduleVisible);
+    _inbox.update(
+      _availableDiscoveries,
+      snapshotReady: widget.discoverySnapshotReady,
+    );
+    _arrival.addStatusListener((status) {
+      if (status == AnimationStatus.completed) _scheduleVisible();
+    });
     if (widget.anchorTurnId != null) _scrollToAnchor();
     _scheduleVisible();
     if (widget.startRecordingOnOpen) {
@@ -215,6 +350,20 @@ class _ChatPageState extends State<ChatPage>
   @override
   void didUpdateWidget(covariant ChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.referenceCard != oldWidget.referenceCard) {
+      _reference = widget.referenceCard;
+    }
+    if (_inbox.update(
+      _availableDiscoveries,
+      snapshotReady: widget.discoverySnapshotReady,
+      allowNew:
+          !widget.loadingOlderMessages &&
+          !oldWidget.loadingOlderMessages &&
+          oldWidget.locationRevision == widget.locationRevision &&
+          oldWidget.anchorTurnId == widget.anchorTurnId,
+    )) {
+      _queueArrival();
+    }
     final previousText = {
       for (final m in oldWidget.messages)
         if (!m.isUser && m.turnId != null) m.turnId: m.text,
@@ -359,6 +508,8 @@ class _ChatPageState extends State<ChatPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _inForeground = state == AppLifecycleState.resumed;
+    if (!_inForeground && _inbox.pending) _deferredArrival = true;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
@@ -438,6 +589,9 @@ class _ChatPageState extends State<ChatPage>
     }
     _highlightTimer?.cancel();
     _focusPulse.dispose();
+    _arrivalBatch?.cancel();
+    _hintTimer?.cancel();
+    _arrival.dispose();
     _input.dispose();
     _focus.dispose();
     _scroll.removeListener(_scheduleVisible);
@@ -458,68 +612,175 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
-  Widget _header() => Row(
+  Widget _header() => Stack(
+    alignment: Alignment.center,
     children: [
-      if (widget.returningUser)
-        IconButton(
-          tooltip: '返回',
-          onPressed: _busy && !widget.lockComposer ? null : widget.onExit,
-          icon: chatSvg('back', width: 24, height: 24),
-        ),
-      Container(
-        height: 36,
-        padding: const EdgeInsets.fromLTRB(6, 4, 16, 4),
-        decoration: BoxDecoration(
-          color: const Color(0x62000000),
-          borderRadius: BorderRadius.circular(40),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+      Row(
+        children: [
+          if (widget.returningUser)
+            SizedBox(
+              width: 33,
+              height: 44,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: -10,
+                    width: 44,
+                    height: 44,
+                    child: IconButton(
+                      key: const ValueKey('chat-back'),
+                      tooltip: translate(context, '返回'),
+                      onPressed: !_busy || widget.lockComposer
+                          ? widget.onExit
+                          : null,
+                      padding: const EdgeInsets.all(10),
+                      icon: chatSvg('back', width: 24, height: 24),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Tooltip(
+            message: widget.name,
+            child: Container(
+              height: 36,
+              constraints: BoxConstraints(
+                maxWidth: math.min(130, MediaQuery.sizeOf(context).width * .32),
+              ),
+              padding: const EdgeInsets.fromLTRB(6, 4, 16, 4),
+              decoration: BoxDecoration(
+                color: const Color(0x62000000),
+                borderRadius: BorderRadius.circular(40),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipOval(
+                    child: Image.asset(
+                      'assets/chat/avatar.png',
+                      width: 28,
+                      height: 28,
+                      excludeFromSemantics: true,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: Text(
+                      widget.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        inherit: false,
+                        textBaseline: TextBaseline.alphabetic,
+                        fontFamily: 'PingFang SC',
+                        fontSize: 14,
+                        height: 18 / 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Spacer(),
+          if (widget.returningUser)
+            TextButton(
+              onPressed: _busy ? null : widget.onExplore,
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(90, 44),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0x592D2039),
+                  borderRadius: BorderRadius.circular(107),
+                  border: Border.all(color: const Color(0xE6A17DC5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    chatSvg('explore_planet', width: 24, height: 24),
+                    const SizedBox(width: 2),
+                    const AppText(
+                      '逛一逛',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        letterSpacing: .13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (!widget.returningUser)
+            TextButton(
+              onPressed: _busy && !widget.lockComposer ? null : widget.onExit,
+              style: TextButton.styleFrom(
+                overlayColor: Colors.transparent,
+                foregroundColor: const Color(0xD9FFFFFF),
+                minimumSize: const Size(44, 44),
+                padding: EdgeInsets.zero,
+              ),
+              child: AppText(
+                widget.exitLabel,
+                style: const TextStyle(
+                  inherit: false,
+                  textBaseline: TextBaseline.alphabetic,
+                  fontFamily: 'PingFang SC',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+        ],
+      ),
+      _DiscoveryBreathingGlow(
+        active:
+            _inbox.unread.isNotEmpty && !_discoveriesExpanded && !_reduceMotion,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/chat/avatar.png',
-                width: 28,
-                height: 28,
-                excludeFromSemantics: true,
+            IconButton(
+              key: const ValueKey('toggle-header-discoveries'),
+              tooltip: translate(
+                context,
+                _discoveriesExpanded ? '收起发现' : '展开发现',
+              ),
+              onPressed: _toggleDiscoveries,
+              icon: chatSvg(
+                _discoveriesExpanded ? 'discoveries_up' : 'discoveries_down',
+                width: 38,
+                height: 38,
               ),
             ),
-            const SizedBox(width: 9),
-            Text(
-              widget.name,
-              style: const TextStyle(
-                inherit: false,
-                textBaseline: TextBaseline.alphabetic,
-                fontFamily: 'PingFang SC',
-                fontSize: 14,
-                height: 18 / 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+            if (_inbox.unread.isNotEmpty)
+              Positioned(
+                right: 5,
+                top: 5,
+                child: IgnorePointer(
+                  child: Semantics(
+                    label: translate(context, '有未读发现'),
+                    child: DecoratedBox(
+                      key: ValueKey('new-discovery-dot'),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFF80D5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: SizedBox.square(dimension: 8),
+                    ),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),
-      const Spacer(),
-      if (!widget.returningUser)
-        TextButton(
-          onPressed: _busy && !widget.lockComposer ? null : widget.onExit,
-          style: TextButton.styleFrom(
-            overlayColor: Colors.transparent,
-            foregroundColor: const Color(0xD9FFFFFF),
-            minimumSize: const Size(44, 44),
-            padding: EdgeInsets.zero,
-          ),
-          child: Text(
-            widget.exitLabel,
-            style: const TextStyle(
-              inherit: false,
-              textBaseline: TextBaseline.alphabetic,
-              fontFamily: 'PingFang SC',
-              fontSize: 14,
-            ),
-          ),
-        ),
     ],
   );
 
@@ -551,7 +812,7 @@ class _ChatPageState extends State<ChatPage>
                   ? null
                   : widget.onLoadOlderMessages,
               style: TextButton.styleFrom(foregroundColor: Colors.white),
-              child: Text(widget.loadingOlderMessages ? '加载中…' : '加载更早消息'),
+              child: AppText(widget.loadingOlderMessages ? '加载中…' : '加载更早消息'),
             ),
           if (widget.timeLabel != null) _timestamp(widget.timeLabel!),
           Container(
@@ -560,7 +821,7 @@ class _ChatPageState extends State<ChatPage>
               color: const Color(0x66000000),
               borderRadius: BorderRadius.circular(57),
             ),
-            child: const Text(
+            child: const AppText(
               '所有内容均由 AI 生成，均为虚构内容。',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -626,7 +887,7 @@ class _ChatPageState extends State<ChatPage>
   Widget _timestamp(String label) => Padding(
     padding: const EdgeInsets.only(top: 8, bottom: 20),
     child: Center(
-      child: Text(
+      child: AppText(
         label,
         key: ValueKey('chat-time-$label'),
         style: const TextStyle(
@@ -675,7 +936,7 @@ class _ChatPageState extends State<ChatPage>
                     color: Color(0xFFFFDF84),
                   ),
                   SizedBox(width: 6),
-                  Text(
+                  AppText(
                     '已定位到这条发现',
                     style: TextStyle(
                       color: Color(0xFFFFDF84),
@@ -691,41 +952,19 @@ class _ChatPageState extends State<ChatPage>
 
   void _scheduleVisible() => WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!mounted ||
+        !_discoveriesExpanded ||
         _locatingAnchor ||
-        !_scroll.hasClients ||
-        widget.onDiscoveryVisible == null ||
         ModalRoute.of(context)?.isCurrent == false) {
       return;
     }
-    final viewport = _scroll.position.context.notificationContext
-        ?.findRenderObject();
-    if (viewport is! RenderBox || !viewport.hasSize) return;
-    final bounds = viewport.localToGlobal(Offset.zero) & viewport.size;
-    final renderedTurns = {
-      for (final entry in _entries)
-        for (final message in entry.messages)
-          if (message.turnId != null) message.turnId: entry.message.turnId,
-    };
-    for (final message in widget.messages) {
-      final task = message.referenceTaskId;
-      if (task == null ||
-          message.cards.isEmpty ||
-          _reportedTasks.contains(task)) {
-        continue;
-      }
-      final renderedId = renderedTurns[message.turnId] ?? message.turnId;
-      final carousel = _discoveryKeys[renderedId]?.currentState;
-      if (carousel != null &&
-          carousel.selectedCard?['_chatTurnId'] != message.turnId) {
-        continue;
-      }
-      final box = _turnKeys[renderedId]?.currentContext?.findRenderObject();
-      if (box is RenderBox &&
-          box.hasSize &&
-          bounds.overlaps(box.localToGlobal(Offset.zero) & box.size)) {
-        _reportedTasks.add(task);
-        widget.onDiscoveryVisible!(task);
-      }
+    if (_arrival.isAnimating) return;
+    final card = _headerDiscoveryKey.currentState?.selectedCard;
+    if (card != null && _inbox.unread.remove(DiscoveryInbox.identity(card))) {
+      setState(() {});
+    }
+    final task = card?['_chatTaskId'];
+    if (task is String && _reportedTasks.add(task)) {
+      widget.onDiscoveryVisible?.call(task);
     }
   });
 
@@ -738,88 +977,24 @@ class _ChatPageState extends State<ChatPage>
     _highlightedTurn = null;
     _locatingAnchor = true;
     _anchorPending = false;
+    _discoveriesExpanded = true;
+    _inbox.locate(widget.anchorMaterialId, widget.anchorTurnId);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || request != _anchorRequest) return;
-      final id = widget.anchorTurnId;
-      final renderedId = _renderedTurnId(id);
-      final carousel = _discoveryKeys[renderedId]?.currentState;
-      if (carousel != null) {
-        final cards = widget.messages
-            .where((m) => m.turnId == id)
-            .firstOrNull
-            ?.cards;
-        if (widget.anchorMaterialId != null &&
-            cards?.any(
-                  (card) => card['materialId'] == widget.anchorMaterialId,
-                ) !=
-                true) {
-          _anchorPending = true;
-          return;
-        }
-      }
+      final carousel = _headerDiscoveryKey.currentState;
+      final selected = await carousel?.revealMaterial(
+        widget.anchorMaterialId,
+        turnId: widget.anchorTurnId,
+      );
       if (!mounted || request != _anchorRequest) return;
-      final target = _turnKeys[renderedId]?.currentContext;
-      if (target == null || !target.mounted || !_scroll.hasClients) {
+      if (selected != true) {
         _anchorPending = true;
+        _locatingAnchor = false;
         return;
-      }
-      final duration =
-          !widget.animate || MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 550);
-      final message = widget.messages.where((m) => m.turnId == id).firstOrNull;
-      final title = message == null ? null : _anchorTitle(message);
-      final paragraph = _textKeys[id]?.currentContext?.findRenderObject();
-      final start = title == null ? -1 : message!.text.indexOf(title);
-      if (paragraph is RenderParagraph && start >= 0) {
-        final boxes = paragraph.getBoxesForSelection(
-          TextSelection(baseOffset: start, extentOffset: start + title!.length),
-        );
-        if (boxes.isNotEmpty) {
-          final offset = RenderAbstractViewport.of(paragraph)
-              .getOffsetToReveal(paragraph, 0.45, rect: boxes.first.toRect())
-              .offset;
-          await _scroll.animateTo(
-            offset.clamp(
-              _scroll.position.minScrollExtent,
-              _scroll.position.maxScrollExtent,
-            ),
-            duration: duration == Duration.zero
-                ? const Duration(milliseconds: 1)
-                : duration,
-            curve: Curves.easeInOutCubic,
-          );
-        } else {
-          await Scrollable.ensureVisible(
-            target,
-            alignment: 0.45,
-            duration: duration,
-          );
-        }
-      } else {
-        await Scrollable.ensureVisible(
-          target,
-          alignment: 0.45,
-          duration: duration,
-        );
-      }
-      if (!mounted || request != _anchorRequest) return;
-      // Bring the row on screen first, then visibly slide to the chosen card.
-      final visibleCarousel = _discoveryKeys[renderedId]?.currentState;
-      if (visibleCarousel != null) {
-        final selected = await visibleCarousel.revealMaterial(
-          widget.anchorMaterialId,
-          turnId: id,
-        );
-        if (!mounted || request != _anchorRequest) return;
-        if (!selected) {
-          _locatingAnchor = false;
-          return;
-        }
       }
       setState(() {
         _locatingAnchor = false;
-        _highlightedTurn = id;
+        _highlightedTurn = widget.anchorTurnId;
       });
       _scheduleVisible();
       if (!MediaQuery.disableAnimationsOf(context) && widget.animate) {
@@ -827,7 +1002,6 @@ class _ChatPageState extends State<ChatPage>
       }
       widget.onAnchorVisible?.call();
       if (!mounted || request != _anchorRequest) return;
-      _highlightTimer?.cancel();
       _highlightTimer = Timer(const Duration(seconds: 5), () {
         if (mounted && request == _anchorRequest) {
           setState(() => _highlightedTurn = null);
@@ -846,27 +1020,15 @@ class _ChatPageState extends State<ChatPage>
 
   Widget _messageBubble(ChatTranscriptEntry entry) {
     final message = entry.message;
+    final displayText = message.isInterfaceText
+        ? translate(context, message.text)
+        : message.text;
     final highlighted = entry.containsTurn(_highlightedTurn);
     final textKey = message.turnId == null
         ? null
         : _textKeys.putIfAbsent(message.turnId!, GlobalKey.new);
-    final bubble = message.hasStructuredDiscoveries
-        ? ChatDiscoveryCarousel(
-            key: message.turnId == null
-                ? null
-                : _discoveryKeys.putIfAbsent(
-                    message.turnId!,
-                    GlobalKey<ChatDiscoveryCarouselState>.new,
-                  ),
-            cards: entry.cards,
-            onPageChanged: _scheduleVisible,
-            highlightedTurnId: highlighted ? _highlightedTurn : null,
-            animate: widget.animate,
-            focusAnimation: _focusPulse,
-            highlightedMaterialId: highlighted ? widget.anchorMaterialId : null,
-          )
-        : message.isUser
-        ? ChatBubble(text: message.text, isUser: true)
+    final bubble = message.isUser
+        ? ChatBubble(text: displayText, isUser: true)
         : message.isThinking
         ? Align(
             alignment: AlignmentDirectional.centerStart,
@@ -887,7 +1049,7 @@ class _ChatPageState extends State<ChatPage>
                       ),
                       SizedBox(width: 8),
                       Flexible(
-                        child: Text(
+                        child: AppText(
                           '正在思考…',
                           style: TextStyle(
                             fontFamily: 'PingFang SC',
@@ -904,7 +1066,7 @@ class _ChatPageState extends State<ChatPage>
             ),
           )
         : ChatTypewriter(
-            text: message.text,
+            text: displayText,
             animate:
                 widget.animate &&
                 !highlighted &&
@@ -914,8 +1076,10 @@ class _ChatPageState extends State<ChatPage>
           );
     return KeyedSubtree(
       key: switch (message) {
-        ChatMessage(:final turnId?) =>
-          _turnKeys.putIfAbsent(turnId, GlobalKey.new),
+        ChatMessage(:final turnId?) => _turnKeys.putIfAbsent(
+          turnId,
+          GlobalKey.new,
+        ),
         ChatMessage(:final clientMessageId?) => ValueKey(clientMessageId),
         _ => null,
       },
@@ -945,12 +1109,15 @@ class _ChatPageState extends State<ChatPage>
                   _playingPath == clip.path
                       ? Icons.stop_rounded
                       : Icons.play_arrow_rounded,
-                  semanticLabel: _playingPath == clip.path ? '停止播放' : '播放录音',
+                  semanticLabel: translate(
+                    context,
+                    _playingPath == clip.path ? '停止播放' : '播放录音',
+                  ),
                   color: const Color(0xFF51397B),
                 ),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Text(
+                  child: AppText(
                     '语音 ${math.max(1, clip.duration.inSeconds)}秒 · ${clip.ephemeral ? '本次会话' : '仅本机'}',
                     style: const TextStyle(
                       inherit: false,
@@ -1002,8 +1169,8 @@ class _ChatPageState extends State<ChatPage>
                         fontSize: 15,
                         color: Colors.white,
                       ),
-                      decoration: const InputDecoration(
-                        hintText: '输入你想说的话…',
+                      decoration: InputDecoration(
+                        hintText: translate(context, '输入你想说的话…'),
                         hintStyle: TextStyle(
                           inherit: false,
                           textBaseline: TextBaseline.alphabetic,
@@ -1039,7 +1206,7 @@ class _ChatPageState extends State<ChatPage>
                         : _input.text.isEmpty
                         ? null
                         : IconButton(
-                            tooltip: '清空输入',
+                            tooltip: translate(context, '清空输入'),
                             onPressed: () {
                               setState(_input.clear);
                               _focus.requestFocus();
@@ -1059,12 +1226,30 @@ class _ChatPageState extends State<ChatPage>
             width: 53,
             height: 49,
             child: IconButton(
-              tooltip: '开始录音',
+              tooltip: translate(
+                context,
+                _input.text.trim().isNotEmpty ? '发送' : '开始录音',
+              ),
               padding: EdgeInsets.zero,
               alignment: Alignment.center,
               iconSize: 28,
-              onPressed: _busy ? null : _startRecording,
-              icon: chatSvg('mic', width: 28, height: 28),
+              onPressed: _busy
+                  ? null
+                  : _input.text.trim().isNotEmpty
+                  ? _send
+                  : _startRecording,
+              icon: _sendingText
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : _input.text.trim().isNotEmpty
+                  ? const ChatSendIcon()
+                  : chatSvg('mic', width: 28, height: 28),
             ),
           ),
         ),
@@ -1086,7 +1271,7 @@ class _ChatPageState extends State<ChatPage>
               minWidth: 44,
               maxWidth: 44,
               child: IconButton(
-                tooltip: '取消录音',
+                tooltip: translate(context, '取消录音'),
                 padding: EdgeInsets.zero,
                 onPressed: _busy
                     ? null
@@ -1139,7 +1324,10 @@ class _ChatPageState extends State<ChatPage>
             width: 50,
             height: 50,
             child: IconButton(
-              tooltip: _dictating || _dictationSendPending ? '发送' : '完成录音',
+              tooltip: translate(
+                context,
+                _dictating || _dictationSendPending ? '发送' : '完成录音',
+              ),
               padding: EdgeInsets.zero,
               onPressed: _busy
                   ? null
@@ -1188,18 +1376,40 @@ class _ChatPageState extends State<ChatPage>
                         constraints.maxHeight >= 600 ? 44.0 : 0.0,
                       ) +
                       9;
-                  final bottomSafeArea = math.max(media.viewPadding.bottom, 34.0);
+                  final bottomSafeArea = math.max(
+                    media.viewPadding.bottom,
+                    34.0,
+                  );
                   final footerBottom =
                       math.max(media.viewInsets.bottom, bottomSafeArea) + 8;
                   final footerTop = constraints.maxHeight - footerBottom - 49;
+                  final referenceHeight = math.max(
+                    75.0,
+                    40 +
+                        media.textScaler.scale(14) +
+                        media.textScaler.scale(12),
+                  );
                   final bannerTop = headerTop + 52;
                   final showBanner =
                       !widget.returningUser && footerTop - 68 > headerTop + 124;
-                  final messageTop = headerTop + (showBanner ? 108 : 52);
+                  final showHeaderDiscoveries =
+                      _discoveriesExpanded && footerTop - headerTop > 220;
+                  final messageTop =
+                      headerTop +
+                      (showHeaderDiscoveries
+                          ? (_inbox.pending ? 242 : 226)
+                          : showBanner
+                          ? 108
+                          : 52);
                   // The floating explore button is an overlay, not the list
                   // boundary. Messages remain visible beside and below it,
                   // all the way down to the composer.
-                  final messageBottom = math.max(messageTop + 1, footerTop - 9);
+                  final messageBottom = math.max(
+                    messageTop + 1,
+                    footerTop -
+                        9 -
+                        (_reference == null ? 0 : referenceHeight + 12),
+                  );
                   final welcomeGap = math.min(
                     68.0,
                     math.max(8.0, (footerTop - 64 - messageTop) * 0.25),
@@ -1215,8 +1425,8 @@ class _ChatPageState extends State<ChatPage>
                     children: [
                       Positioned(
                         top: headerTop,
-                        left: widget.returningUser ? 4 : 16,
-                        right: 8,
+                        left: 16,
+                        right: 16,
                         height: 44,
                         child: _header(),
                       ),
@@ -1263,7 +1473,7 @@ class _ChatPageState extends State<ChatPage>
                           left: 16,
                           right: 16,
                           bottom: footerBottom + 57,
-                          child: Text(
+                          child: AppText(
                             error,
                             style: const TextStyle(
                               inherit: false,
@@ -1271,6 +1481,130 @@ class _ChatPageState extends State<ChatPage>
                               color: Colors.white,
                               fontSize: 12,
                             ),
+                          ),
+                        ),
+                      if (_inbox.pending &&
+                          (_discoveriesExpanded || _showNewHint))
+                        Positioned(
+                          top: headerTop + 43,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: TextButton(
+                              key: const ValueKey('new-discovery-hint'),
+                              onPressed: _applyArrivals,
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFFFFC4ED),
+                                backgroundColor: const Color(0xE6351D55),
+                                minimumSize: const Size(100, 28),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const AppText(
+                                '有新发现 · 点击查看',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (showHeaderDiscoveries)
+                        Positioned(
+                          top: headerTop + (_inbox.pending ? 81 : 65),
+                          left: 16,
+                          right: 16,
+                          child: _headerDiscoveries.isEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xE62A2734),
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: const AppText(
+                                    '还没有发现，去逛一逛吧',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                )
+                              : KeyedSubtree(
+                                  key: const ValueKey('header-discoveries'),
+                                  child: AnimatedBuilder(
+                                    animation: _arrival,
+                                    builder: (_, child) => Transform.translate(
+                                      offset: Offset(
+                                        _arrivalRevision > 0 && !_reduceMotion
+                                            ? 24 * (1 - _arrival.value)
+                                            : 0,
+                                        0,
+                                      ),
+                                      child: Opacity(
+                                        opacity:
+                                            _arrivalRevision > 0 &&
+                                                !_reduceMotion
+                                            ? .45 + .55 * _arrival.value
+                                            : 1,
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              17,
+                                            ),
+                                            boxShadow: [
+                                              if (_arrivalRevision > 0 &&
+                                                  !_reduceMotion)
+                                                BoxShadow(
+                                                  color: const Color(0xFFDC9BFF)
+                                                      .withValues(
+                                                        alpha:
+                                                            .35 *
+                                                            math.sin(
+                                                              math.pi *
+                                                                  _arrival
+                                                                      .value,
+                                                            ),
+                                                      ),
+                                                  blurRadius: 14,
+                                                ),
+                                            ],
+                                          ),
+                                          child: child,
+                                        ),
+                                      ),
+                                    ),
+                                    child: ChatDiscoveryCarousel(
+                                      key: _headerDiscoveryKey,
+                                      onReference: _referenceDiscovery,
+                                      discoveryService: widget.discoveryService,
+                                      cards: _headerDiscoveries,
+                                      onPageChanged: _scheduleVisible,
+                                      onInteractionChanged: (active) {
+                                        if (!mounted) return;
+                                        _cardInteracting = active;
+                                        if (active && _inbox.pending) {
+                                          _deferredArrival = true;
+                                        }
+                                        if (!active) _scheduleVisible();
+                                      },
+                                      highlightedTurnId: _highlightedTurn,
+                                      highlightedMaterialId:
+                                          _highlightedTurn == null
+                                          ? null
+                                          : widget.anchorMaterialId,
+                                      focusAnimation: _focusPulse,
+                                      animate: widget.animate,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      if (_reference != null)
+                        Positioned(
+                          left: 16,
+                          right: 16,
+                          bottom: footerBottom + 66,
+                          height: referenceHeight,
+                          child: DiscoveryReference(
+                            card: _reference!,
+                            onDismiss: () => _referenceDiscovery(null),
                           ),
                         ),
                       Positioned(
@@ -1291,5 +1625,82 @@ class _ChatPageState extends State<ChatPage>
         ),
       ),
     ),
+  );
+}
+
+/// Keeps the unread reminder local to the button, without rebuilding the chat.
+class _DiscoveryBreathingGlow extends StatefulWidget {
+  const _DiscoveryBreathingGlow({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_DiscoveryBreathingGlow> createState() =>
+      _DiscoveryBreathingGlowState();
+}
+
+class _DiscoveryBreathingGlowState extends State<_DiscoveryBreathingGlow>
+    with SingleTickerProviderStateMixin {
+  late final _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _breath.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _DiscoveryBreathingGlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active == oldWidget.active) return;
+    if (widget.active) {
+      _breath.repeat(reverse: true);
+    } else {
+      _breath.stop();
+      _breath.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _breath,
+    child: widget.child,
+    builder: (context, child) {
+      final breath = Curves.easeInOutSine.transform(_breath.value);
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          if (widget.active)
+            IgnorePointer(
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF80D5)
+                          .withValues(alpha: .10 + .22 * breath),
+                      blurRadius: 8 + 10 * breath,
+                      spreadRadius: 1 + 3 * breath,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Transform.scale(scale: 1 + .07 * breath, child: child),
+        ],
+      );
+    },
   );
 }

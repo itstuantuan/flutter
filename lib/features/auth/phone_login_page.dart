@@ -1,3 +1,5 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -216,7 +218,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                 style: _text,
                 cursorColor: const Color(0xFFF44BE6),
                 decoration: InputDecoration(
-                  hintText: '请输入手机号',
+                  hintText: translate(context, '请输入手机号'),
                   hintStyle: _text.copyWith(color: const Color(0xFF52535A)),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -278,8 +280,8 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
             showCursor: false,
             enableInteractiveSelection: true,
             style: _text.copyWith(color: Colors.transparent),
-            decoration: const InputDecoration(
-              labelText: '六位短信验证码',
+            decoration: InputDecoration(
+              labelText: translate(context, '六位短信验证码'),
               floatingLabelBehavior: FloatingLabelBehavior.never,
               labelStyle: TextStyle(color: Colors.transparent),
               border: InputBorder.none,
@@ -297,7 +299,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
   Widget _nextButton() => Semantics(
     button: true,
     enabled: _enabled,
-    label: '下一步',
+    label: translate(context, '下一步'),
     child: ExcludeSemantics(
       child: Opacity(
         opacity: _codeStep || _enabled || _busy ? 1 : .24,
@@ -326,7 +328,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                       color: Colors.white,
                     ),
                   )
-                : Text(
+                : AppText(
                     '下一步',
                     style: _text.copyWith(
                       fontWeight: FontWeight.w600,
@@ -344,7 +346,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
     children: [
       Semantics(
         checked: _agreed,
-        label: '同意服务协议和隐私政策',
+        label: translate(context, '同意服务协议和隐私政策'),
         child: InkWell(
           key: const ValueKey('login-agree'),
           splashFactory: NoSplash.splashFactory,
@@ -370,7 +372,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
           alignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(
+            AppText(
               '我已阅读并同意',
               style: _text.copyWith(
                 fontSize: 12,
@@ -378,7 +380,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
               ),
             ),
             _policyLink('《服务协议》', false),
-            Text(
+            AppText(
               '和',
               style: _text.copyWith(
                 fontSize: 12,
@@ -396,7 +398,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
     onTap: () => _openPolicy(privacy),
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(
+      child: AppText(
         text,
         style: _text.copyWith(fontSize: 12, color: const Color(0x8FF44BE6)),
       ),
@@ -450,15 +452,20 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                         children: [
                           Semantics(
                             header: true,
-                            label: _codeStep ? '输入验证码' : '手机号登录',
-                            child: loginSvg(
-                              _codeStep ? 'otp_title' : 'phone_title',
-                              width: 233,
-                              height: 26,
+                            label: translate(
+                              context,
+                              _codeStep ? '输入验证码' : '手机号登录',
+                            ),
+                            child: AppText(
+                              _codeStep ? '输入验证码' : '手机号登录',
+                              style: _text.copyWith(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Text(
+                          AppText(
                             _codeStep
                                 ? '验证码发送至+86 ${_phone.text}'
                                 : '登录开始你的路程,Pals在等你',
@@ -473,12 +480,14 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                           SizedBox(height: _codeStep ? 34 : 28),
                           _nextButton(),
                           if (_codeStep)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              spacing: 8,
+                              runSpacing: 4,
                               children: [
                                 TextButton(
                                   onPressed: _busy ? null : _backToPhone,
-                                  child: Text(
+                                  child: AppText(
                                     '修改手机号',
                                     style: _text.copyWith(
                                       fontSize: 12,
@@ -490,7 +499,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                                   onPressed: _busy || _seconds > 0
                                       ? null
                                       : () => _sendCode(resend: true),
-                                  child: Text(
+                                  child: AppText(
                                     _seconds > 0 ? '${_seconds}s 后重发' : '重新发送',
                                     style: _text.copyWith(
                                       fontSize: 12,
@@ -509,7 +518,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                               padding: const EdgeInsets.only(top: 8),
                               child: Semantics(
                                 liveRegion: true,
-                                child: Text(
+                                child: AppText(
                                   _error!,
                                   textAlign: TextAlign.center,
                                   style: _text.copyWith(
@@ -533,7 +542,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                       height: 48,
                       child: IconButton(
                         key: const ValueKey('login-back'),
-                        tooltip: '返回手机号输入',
+                        tooltip: translate(context, '返回手机号输入'),
                         onPressed: _busy ? null : _backToPhone,
                         padding: EdgeInsets.zero,
                         icon: SvgPicture.asset(

@@ -1,9 +1,12 @@
+import '../../core/localization/app_localizations.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'chat_discovery_detail.dart';
+import '../discoveries/discovery_detail_page.dart';
+import 'chat_service.dart';
 
 /// Figma 431:6636 / 431:6794. Adjacent discovery turns share one horizontal
 /// carousel; its vertical position never depends on which card is selected.
@@ -14,6 +17,9 @@ class ChatDiscoveryCarousel extends StatefulWidget {
     this.highlightedMaterialId,
     this.highlightedTurnId,
     this.onPageChanged,
+    this.onInteractionChanged,
+    this.onReference,
+    this.discoveryService,
     this.focusAnimation,
     this.animate = true,
   });
@@ -22,6 +28,9 @@ class ChatDiscoveryCarousel extends StatefulWidget {
   final String? highlightedMaterialId;
   final int? highlightedTurnId;
   final VoidCallback? onPageChanged;
+  final ValueChanged<bool>? onInteractionChanged;
+  final ValueChanged<Map<String, dynamic>>? onReference;
+  final ChatService? discoveryService;
   final Animation<double>? focusAnimation;
   final bool animate;
 
@@ -124,7 +133,10 @@ class ChatDiscoveryCarouselState extends State<ChatDiscoveryCarousel> {
             Semantics(
               button: true,
               selected: _selected == index,
-              label: '第 ${index + 1} 条发现，共 ${widget.cards.length} 条',
+              label: translate(
+                context,
+                '第 ${index + 1} 条发现，共 ${widget.cards.length} 条',
+              ),
               child: GestureDetector(
                 key: ValueKey('discovery-page-$index'),
                 behavior: HitTestBehavior.opaque,
@@ -185,69 +197,85 @@ class ChatDiscoveryCarouselState extends State<ChatDiscoveryCarousel> {
               child: OverflowBox(
                 minWidth: viewportWidth,
                 maxWidth: viewportWidth,
-                child: PageView.builder(
-                  controller: _pages,
-                  itemCount: widget.cards.length,
-                  onPageChanged: (index) {
-                    setState(() => _selected = index);
-                    widget.onPageChanged?.call();
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (event) {
+                    if (event is ScrollStartNotification &&
+                        event.dragDetails != null) {
+                      widget.onInteractionChanged?.call(true);
+                    }
+                    if (event is ScrollEndNotification) {
+                      widget.onInteractionChanged?.call(false);
+                    }
+                    return false;
                   },
-                  itemBuilder: (context, index) => AnimatedBuilder(
-                    animation: Listenable.merge([
-                      _pages!,
-                      ?widget.focusAnimation,
-                    ]),
-                    builder: (context, child) {
-                      final page =
-                          _pages!.hasClients &&
-                              _pages!.position.hasContentDimensions
-                          ? _pages!.page ?? _selected.toDouble()
-                          : _selected.toDouble();
-                      final distance = (page - index).abs().clamp(0.0, 1.0);
-                      final focused = _focused(widget.cards[index]);
-                      final progress = widget.focusAnimation?.value ?? 0;
-                      final pulse =
-                          focused &&
-                              !_reduceMotion &&
-                              progress > 0 &&
-                              progress < 1
-                          ? math
-                                .pow(math.sin(math.pi * progress * 2), 2)
-                                .toDouble()
-                          : 0.0;
-                      return Center(
-                        child: OverflowBox(
-                          minWidth: cardWidth,
-                          maxWidth: cardWidth,
-                          child: Transform.scale(
-                            scale: (1 - .15 * distance) * (1 + .015 * pulse),
-                            child: Opacity(
-                              opacity: 1 - .12 * distance,
-                              child: DecoratedBox(
-                                key: ValueKey('discovery-glow-$index'),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(17),
-                                  boxShadow: [
-                                    if (pulse > 0)
-                                      BoxShadow(
-                                        color: const Color(0xFFDC9BFF)
-                                            .withValues(alpha: .65 * pulse),
-                                        blurRadius: 12 * pulse,
-                                        spreadRadius: 1.5 * pulse,
-                                      ),
-                                  ],
+                  child: PageView.builder(
+                    controller: _pages,
+                    itemCount: widget.cards.length,
+                    onPageChanged: (index) {
+                      setState(() => _selected = index);
+                      widget.onPageChanged?.call();
+                    },
+                    itemBuilder: (context, index) => AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _pages!,
+                        ?widget.focusAnimation,
+                      ]),
+                      builder: (context, child) {
+                        final page =
+                            _pages!.hasClients &&
+                                _pages!.position.hasContentDimensions
+                            ? _pages!.page ?? _selected.toDouble()
+                            : _selected.toDouble();
+                        final distance = (page - index).abs().clamp(0.0, 1.0);
+                        final focused = _focused(widget.cards[index]);
+                        final progress = widget.focusAnimation?.value ?? 0;
+                        final pulse =
+                            focused &&
+                                !_reduceMotion &&
+                                progress > 0 &&
+                                progress < 1
+                            ? math
+                                  .pow(math.sin(math.pi * progress * 2), 2)
+                                  .toDouble()
+                            : 0.0;
+                        return Center(
+                          child: OverflowBox(
+                            minWidth: cardWidth,
+                            maxWidth: cardWidth,
+                            child: Transform.scale(
+                              scale: (1 - .15 * distance) * (1 + .015 * pulse),
+                              child: Opacity(
+                                opacity: 1 - .12 * distance,
+                                child: DecoratedBox(
+                                  key: ValueKey('discovery-glow-$index'),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(17),
+                                    boxShadow: [
+                                      if (pulse > 0)
+                                        BoxShadow(
+                                          color: const Color(0xFFDC9BFF)
+                                              .withValues(alpha: .65 * pulse),
+                                          blurRadius: 12 * pulse,
+                                          spreadRadius: 1.5 * pulse,
+                                        ),
+                                    ],
+                                  ),
+                                  child: child,
                                 ),
-                                child: child,
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                    child: ChatDiscoveryCard(
-                      card: widget.cards[index],
-                      height: 121,
-                      highlighted: _focused(widget.cards[index]),
+                        );
+                      },
+                      child: ChatDiscoveryCard(
+                        card: widget.cards[index],
+                        history: widget.cards,
+                        discoveryService: widget.discoveryService,
+                        height: 121,
+                        highlighted: _focused(widget.cards[index]),
+                        onInteractionChanged: widget.onInteractionChanged,
+                        onReference: widget.onReference,
+                      ),
                     ),
                   ),
                 ),
@@ -266,23 +294,41 @@ class ChatDiscoveryCard extends StatelessWidget {
     super.key,
     required this.card,
     required this.height,
+    this.history = const [],
     this.highlighted = false,
+    this.onInteractionChanged,
+    this.onReference,
+    this.discoveryService,
   });
 
   final Map<String, dynamic> card;
   final double height;
+  final List<Map<String, dynamic>> history;
   final bool highlighted;
+  final ValueChanged<bool>? onInteractionChanged;
+  final ValueChanged<Map<String, dynamic>>? onReference;
+  final ChatService? discoveryService;
   static const background = 'assets/chat/discovery_card_background.png';
 
   String _text(String key) => (card[key] as String? ?? '').trim();
 
-  Future<void> _open(BuildContext context) => showDialog<void>(
-    context: context,
-    barrierColor: const Color(0xB31F1F1F),
-    barrierLabel: '返回对话',
-    useSafeArea: false,
-    builder: (_) => ChatDiscoveryDetail(card: card),
-  );
+  Future<void> _open(BuildContext context) async {
+    onInteractionChanged?.call(true);
+    try {
+      final reference = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(
+          builder: (_) => DiscoveryDetailPage(
+            card: card,
+            history: history,
+            service: discoveryService,
+          ),
+        ),
+      );
+      if (reference != null) onReference?.call(reference);
+    } finally {
+      onInteractionChanged?.call(false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +345,7 @@ class ChatDiscoveryCard extends StatelessWidget {
             .clamp(1, 3);
     return Semantics(
       button: true,
-      label: '${_text('title')}，查看完整内容',
+      label: '${_text('title')}, ${translate(context, '查看完整内容')}',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _open(context),
