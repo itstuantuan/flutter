@@ -5,9 +5,11 @@
       "name": "iPhone 真机调试（开发签名）",
       "request": "launch",
       "type": "dart",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/lib/main.dart",
       "flutterMode": "debug",
       "toolArgs": [
-        "--dart-define-from-file=env/development.local.json"
+        "--dart-define-from-file=${workspaceFolder}/env/development.local.json"
       ],
       "preLaunchTask": "Prepare Google OAuth development"
     },
@@ -15,12 +17,14 @@
       "name": "iPhone 真机 Release（开发签名）",
       "request": "launch",
       "type": "dart",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/lib/main.dart",
       "flutterMode": "release",
       "env": {
         "XCODE_XCCONFIG_FILE": "${workspaceFolder}/ios/Flutter/DeviceRelease.xcconfig"
       },
       "toolArgs": [
-        "--dart-define-from-file=env/development.local.json"
+        "--dart-define-from-file=${workspaceFolder}/env/development.local.json"
       ],
       "preLaunchTask": "Prepare Google OAuth development"
     },
@@ -28,12 +32,14 @@
       "name": "iPhone 真机 Release（正式接口·开发签名）",
       "request": "launch",
       "type": "dart",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/lib/main.dart",
       "flutterMode": "release",
       "env": {
         "XCODE_XCCONFIG_FILE": "${workspaceFolder}/ios/Flutter/DeviceRelease.xcconfig"
       },
       "toolArgs": [
-        "--dart-define-from-file=env/production.local.json"
+        "--dart-define-from-file=${workspaceFolder}/env/production.local.json"
       ],
       "preLaunchTask": "Prepare Google OAuth production"
     },
@@ -41,9 +47,11 @@
       "name": "Flutter Debug",
       "request": "launch",
       "type": "dart",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/lib/main.dart",
       "flutterMode": "debug",
       "toolArgs": [
-        "--dart-define-from-file=env/development.local.json"
+        "--dart-define-from-file=${workspaceFolder}/env/development.local.json"
       ],
       "preLaunchTask": "Prepare Google OAuth development"
     },
@@ -51,9 +59,11 @@
       "name": "Flutter Profile",
       "request": "launch",
       "type": "dart",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/lib/main.dart",
       "flutterMode": "profile",
       "toolArgs": [
-        "--dart-define-from-file=env/development.local.json"
+        "--dart-define-from-file=${workspaceFolder}/env/development.local.json"
       ],
       "preLaunchTask": "Prepare Google OAuth development"
     },
@@ -61,9 +71,11 @@
       "name": "Flutter Release",
       "request": "launch",
       "type": "dart",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/lib/main.dart",
       "flutterMode": "release",
       "toolArgs": [
-        "--dart-define-from-file=env/production.local.json"
+        "--dart-define-from-file=${workspaceFolder}/env/production.local.json"
       ],
       "preLaunchTask": "Prepare Google OAuth production"
     }
