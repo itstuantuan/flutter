@@ -14,6 +14,7 @@ import '../discoveries/discovery_detail_page.dart';
 import 'chat_service.dart';
 
 import 'chat_message.dart';
+import 'chat_pet.dart';
 import 'chat_time.dart';
 import 'chat_transcript.dart';
 import 'chat_typewriter.dart';
@@ -60,6 +61,7 @@ class ChatPage extends StatefulWidget {
     this.onDiscoveryVisible,
     this.onLoadOlderMessages,
     this.loadingOlderMessages = false,
+    this.showPet,
   });
   final bool returningUser, showWelcome;
   final int? anchorTurnId;
@@ -69,6 +71,10 @@ class ChatPage extends StatefulWidget {
   final ValueChanged<String>? onDiscoveryVisible;
   final VoidCallback? onLoadOlderMessages;
   final bool loadingOlderMessages;
+
+  /// Shows the ViiTor companion over the transcript; defaults to
+  /// [ChatPet.enabled].
+  final bool? showPet;
   final VoidCallback onExit, onExplore;
   final List<ChatMessage> messages;
   final List<Map<String, dynamic>> discoveryCards;
@@ -116,6 +122,11 @@ class _ChatPageState extends State<ChatPage>
   bool _exploreBannerCollapsed = false;
   bool _discoveriesExpanded = false;
   late Map<String, dynamic>? _reference = widget.referenceCard;
+  final _pet = ChatPetPerches();
+  final _petViewport = GlobalKey();
+  bool get _showPet => widget.showPet ?? ChatPet.enabled;
+  Key? _perch(Object id, ChatPetPerchKind kind, {int order = -1}) =>
+      _showPet ? _pet.key(id, kind, order: order) : null;
 
   void _referenceDiscovery(Map<String, dynamic>? card) {
     setState(() => _reference = card);
@@ -792,6 +803,7 @@ class _ChatPageState extends State<ChatPage>
   );
 
   Widget _transcript({double bottomPadding = 0}) {
+    if (_showPet) _pet.begin();
     final entries = _entries;
     final messages = entries.map((entry) => entry.message).toList();
     final thinkingGap = messages.lastOrNull?.isThinking == true ? 20.0 : 0.0;
@@ -823,6 +835,7 @@ class _ChatPageState extends State<ChatPage>
             ),
           if (widget.timeLabel != null) _timestamp(widget.timeLabel!),
           Container(
+            key: _perch('disclaimer', ChatPetPerchKind.obstacle),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(
               color: const Color(0x66000000),
@@ -844,6 +857,7 @@ class _ChatPageState extends State<ChatPage>
           const SizedBox(height: 21),
           if (widget.showWelcome)
             SizedBox(
+              key: _perch('greeting', ChatPetPerchKind.obstacle),
               width: double.infinity,
               child: ChatGreeting(name: widget.name),
             ),
@@ -851,13 +865,14 @@ class _ChatPageState extends State<ChatPage>
             SizedBox(height: i == 0 ? 24 : 16),
             if (timestamps[i] != null) _timestamp(timestamps[i]!),
             if (messages[i].voice case final clip?)
-              _voiceBubble(clip)
+              _voiceBubble(clip, _perchFor(messages[i], i))
             else
-              _messageBubble(entries[i]),
+              _messageBubble(entries[i], _perchFor(messages[i], i)),
           ],
         ],
       ),
     );
+    if (_showPet) _pet.commit();
     return _messages.length < 3
         ? transcript
         : ListenableBuilder(
@@ -891,18 +906,31 @@ class _ChatPageState extends State<ChatPage>
           );
   }
 
+  Key? _perchFor(ChatMessage message, int index) => _perch(
+    (message.isUser, message.turnId ?? message.clientMessageId ?? ('i', index)),
+    message.isUser
+        ? ChatPetPerchKind.user
+        : message.isThinking
+        ? ChatPetPerchKind.thinking
+        : ChatPetPerchKind.reply,
+    order: index,
+  );
+
   Widget _timestamp(String label) => Padding(
     padding: const EdgeInsets.only(top: 8, bottom: 20),
     child: Center(
-      child: AppText(
-        label,
-        key: ValueKey('chat-time-$label'),
-        style: const TextStyle(
-          fontFamily: 'PingFang SC',
-          fontSize: 12,
-          color: Color(0xCCFFFFFF),
-          height: 1.5,
-          shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+      child: KeyedSubtree(
+        key: _perch(('time', label), ChatPetPerchKind.obstacle),
+        child: AppText(
+          label,
+          key: ValueKey('chat-time-$label'),
+          style: const TextStyle(
+            fontFamily: 'PingFang SC',
+            fontSize: 12,
+            color: Color(0xCCFFFFFF),
+            height: 1.5,
+            shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+          ),
         ),
       ),
     ),
@@ -1038,7 +1066,7 @@ class _ChatPageState extends State<ChatPage>
     return title is String && title.isNotEmpty ? title : null;
   }
 
-  Widget _messageBubble(ChatTranscriptEntry entry) {
+  Widget _messageBubble(ChatTranscriptEntry entry, [Key? perch]) {
     final message = entry.message;
     final displayText = message.isInterfaceText
         ? translate(context, message.text)
@@ -1053,6 +1081,9 @@ class _ChatPageState extends State<ChatPage>
             children: [
               if (message.referenceCard case final card?)
                 GestureDetector(
+                  key: perch == null
+                      ? null
+                      : _perch(('ref', perch), ChatPetPerchKind.obstacle),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => DiscoveryDetailPage(
@@ -1064,13 +1095,14 @@ class _ChatPageState extends State<ChatPage>
                   child: DiscoveryReference(card: card),
                 ),
               if (message.referenceCard != null) const SizedBox(height: 8),
-              ChatBubble(text: displayText, isUser: true),
+              ChatBubble(text: displayText, isUser: true, bubbleKey: perch),
             ],
           )
         : message.isThinking
         ? Align(
             alignment: AlignmentDirectional.centerStart,
             child: Semantics(
+              key: perch,
               liveRegion: true,
               child: const ChatGlass(
                 child: Padding(
@@ -1111,6 +1143,7 @@ class _ChatPageState extends State<ChatPage>
                 _typingTurns.contains(message.turnId),
             textKey: textKey,
             highlightText: highlighted ? _anchorTitle(message) : null,
+            bubbleKey: perch,
           );
     return KeyedSubtree(
       key: switch (message) {
@@ -1125,9 +1158,10 @@ class _ChatPageState extends State<ChatPage>
     );
   }
 
-  Widget _voiceBubble(VoiceClip clip) => Align(
+  Widget _voiceBubble(VoiceClip clip, [Key? perch]) => Align(
     alignment: Alignment.centerRight,
     child: ConstrainedBox(
+      key: perch,
       constraints: const BoxConstraints(maxWidth: 269),
       child: Material(
         color: const Color(0xFFD8CCFF),
@@ -1473,7 +1507,10 @@ class _ChatPageState extends State<ChatPage>
                         left: 0,
                         right: 0,
                         height: math.max(1, messageBottom - messageTop),
-                        child: _transcript(bottomPadding: welcomePadding),
+                        child: KeyedSubtree(
+                          key: _petViewport,
+                          child: _transcript(bottomPadding: welcomePadding),
+                        ),
                       ),
                       Positioned(
                         top: messageTop + 4,
@@ -1481,6 +1518,15 @@ class _ChatPageState extends State<ChatPage>
                         right: 24,
                         child: IgnorePointer(child: _locationNotice()),
                       ),
+                      if (_showPet)
+                        Positioned.fill(
+                          child: ChatPetLayer(
+                            perches: _pet,
+                            viewportKey: _petViewport,
+                            scroll: _scroll,
+                            animate: widget.animate,
+                          ),
+                        ),
                       if (showBanner)
                         Positioned(
                           left: 0,

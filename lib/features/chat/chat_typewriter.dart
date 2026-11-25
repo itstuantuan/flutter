@@ -13,11 +13,13 @@ class ChatTypewriter extends StatefulWidget {
     required this.animate,
     this.textKey,
     this.highlightText,
+    this.bubbleKey,
   });
   final String text;
   final bool animate;
   final Key? textKey;
   final String? highlightText;
+  final Key? bubbleKey;
 
   @override
   State<ChatTypewriter> createState() => _ChatTypewriterState();
@@ -87,6 +89,7 @@ class _ChatTypewriterState extends State<ChatTypewriter> {
         text: _characters.take(_visible).join(),
         isUser: false,
         textKey: widget.textKey,
+        bubbleKey: widget.bubbleKey,
         highlightText: widget.highlightText,
       ),
     ),

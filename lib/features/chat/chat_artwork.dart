@@ -429,11 +429,15 @@ class ChatBubble extends StatelessWidget {
     required this.isUser,
     this.highlightText,
     this.textKey,
+    this.bubbleKey,
   });
   final String text;
   final bool isUser;
   final String? highlightText;
   final Key? textKey;
+
+  /// Placed on the tightly sized bubble box, for measuring it.
+  final Key? bubbleKey;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -460,6 +464,7 @@ class ChatBubble extends StatelessWidget {
       return Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
         child: SizedBox(
+          key: bubbleKey,
           width: width.toDouble(),
           child: Stack(
             children: [
