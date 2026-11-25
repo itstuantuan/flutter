@@ -29,7 +29,12 @@ String discoveryCategory(Map<String, dynamic> card) {
 }
 
 String discoveryTime(Map<String, dynamic> card, {DateTime? now}) {
-  final raw = card['createdAt'] ?? card['completedAt'];
+  final raw =
+      (card['state'] as Map?)?[card['_history'] == true
+          ? 'lastViewTime'
+          : 'firstRecommendedTime'] ??
+      card['createdAt'] ??
+      card['completedAt'];
   final date = raw is DateTime
       ? raw
       : raw is num
@@ -59,10 +64,12 @@ class AllDiscoveriesPage extends StatefulWidget {
     required this.cards,
     required this.onOpen,
     this.service,
+    this.onlyHistory = false,
   });
   final List<Map<String, dynamic>> cards;
   final FutureOr<void> Function(Map<String, dynamic>) onOpen;
   final ChatService? service;
+  final bool onlyHistory;
 
   @override
   State<AllDiscoveriesPage> createState() => _AllDiscoveriesPageState();
@@ -72,13 +79,15 @@ class _AllDiscoveriesPageState extends State<AllDiscoveriesPage> {
   final _query = TextEditingController();
   final _scroll = ScrollController();
   DiscoveryHistory? _history;
-  bool _searching = false, _opening = false;
+  bool _searching = false, _opening = false, _onlyHistory = false;
 
   @override
   void initState() {
     super.initState();
+    _onlyHistory = widget.onlyHistory;
     if (widget.service case final service?) {
       _history = DiscoveryHistory(service: service, initial: widget.cards)
+        ..history = _onlyHistory
         ..addListener(_refresh);
       unawaited(_history!.loadMore());
     }
@@ -107,7 +116,7 @@ class _AllDiscoveriesPageState extends State<AllDiscoveriesPage> {
   }
 
   Future<void> _open(Map<String, dynamic> card) async {
-    if (_opening) return;
+    if (_opening || card['available'] == false) return;
     _opening = true;
     try {
       await widget.onOpen(card);
@@ -122,6 +131,7 @@ class _AllDiscoveriesPageState extends State<AllDiscoveriesPage> {
     final cards = (_history?.cards ?? widget.cards)
         .where(
           (card) =>
+              _history != null ||
               '${card['title'] ?? ''} ${discoveryCategory(card)} ${translate(context, discoveryCategory(card))}'
                   .toLowerCase()
                   .contains(query),
@@ -159,6 +169,7 @@ class _AllDiscoveriesPageState extends State<AllDiscoveriesPage> {
                                 setState(() {
                                   _searching = false;
                                   _query.clear();
+                                  unawaited(_history?.search(''));
                                 });
                                 FocusScope.of(context).unfocus();
                               } else {
@@ -171,6 +182,23 @@ class _AllDiscoveriesPageState extends State<AllDiscoveriesPage> {
                               height: 24,
                             ),
                           ),
+                          if (_history != null && !_searching)
+                            IconButton(
+                              tooltip: _onlyHistory ? '全部发现' : '浏览历史',
+                              icon: Icon(
+                                _onlyHistory ? Icons.list : Icons.history,
+                                color: Colors.white,
+                              ),
+                              onPressed: () {
+                                setState(() => _onlyHistory = !_onlyHistory);
+                                unawaited(
+                                  _history!.search(
+                                    _query.text,
+                                    onlyHistory: _onlyHistory,
+                                  ),
+                                );
+                              },
+                            ),
                           if (_searching)
                             Expanded(
                               child: Container(
@@ -201,7 +229,10 @@ class _AllDiscoveriesPageState extends State<AllDiscoveriesPage> {
                                         textInputAction: TextInputAction.search,
                                         onSubmitted: (_) =>
                                             FocusScope.of(context).unfocus(),
-                                        onChanged: (_) => setState(() {}),
+                                        onChanged: (value) {
+                                          setState(() {});
+                                          unawaited(_history?.search(value));
+                                        },
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13,

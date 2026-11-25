@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import '../discoveries/discovery_data.dart';
+
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -44,6 +47,7 @@ class ChatService {
     };
   }
 
+  late final discoveries = DiscoveryData(this);
   final ApiClient client;
   final Future<Map<String, String>> Function() headers;
 

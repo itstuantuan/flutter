@@ -12,7 +12,7 @@ import '../exploration/fakes.dart';
 
 class HistoryService extends FakeBotService {
   bool fail = false;
-  final cursors = <int>[];
+  final cursors = <String>[];
   @override
   Future<Map<String, dynamic>> request(
     String path, {
@@ -21,30 +21,22 @@ class HistoryService extends FakeBotService {
     Map<String, dynamic>? query,
     CancelToken? cancelToken,
   }) async {
-    if (path == '/explorations') {
-      final before = query!['before'] as int;
-      cursors.add(before);
-      return {
-        'items': [
-          {
-            'taskId': before == 0 ? 'new' : 'old',
-            'status': 'completed',
-            'completedAt': 1700000000000,
-          },
-        ],
-        'hasMore': before == 0,
-        'nextBefore': 10,
-      };
-    }
+    expect(path, '/discoveries');
+    final cursor = query!['cursor'] as String;
+    cursors.add(cursor);
     if (fail) throw StateError('offline');
     return {
-      'phase': 'complete',
-      'cards': [
+      'items': [
         {
-          'materialId': 'same-material',
-          'title': path.contains('/new/') ? '新发现' : '旧发现',
+          'discoveryId': 'd1',
+          'taskId': cursor.isEmpty ? 'new' : 'old',
+          'available': true,
+          'card': {'materialId': 'same-material', 'title': '新发现'},
+          'state': {'revision': 0, 'firstRecommendedTime': 1700000000000},
         },
       ],
+      'hasMore': cursor.isEmpty,
+      'nextCursor': cursor.isEmpty ? 'next' : '',
     };
   }
 }
@@ -110,7 +102,7 @@ void main() {
     },
   );
   test(
-    'history deduplicates home, pages by task, and retries failed page',
+    'history deduplicates materials across rounds and retries same cursor',
     () async {
       final service = HistoryService();
       final history = DiscoveryHistory(
@@ -129,9 +121,9 @@ void main() {
       expect(history.cards.length, 1);
       service.fail = false;
       await history.loadMore();
-      expect(service.cursors, [0, 10, 10]);
-      expect(history.cards.length, 2);
-      expect(history.cards.last['taskId'], 'old');
+      expect(service.cursors, ['', 'next', 'next']);
+      expect(history.cards.length, 1);
+      expect(history.cards.last['taskId'], 'new');
       expect(history.hasMore, isFalse);
     },
   );

@@ -163,7 +163,7 @@ void main() {
     expect((store.value['cards'] as List).single['taskId'], 'fresh');
     controller.acceptHome({'cards': []});
     await flush();
-    expect(controller.cards.single['taskId'], 'fresh');
+    expect(controller.cards, isEmpty);
     controller.dispose();
     final restored = ExplorationController(
       service: service,
@@ -171,7 +171,7 @@ void main() {
       displayName: '测试',
     )..pause();
     await restored.initialize();
-    expect(restored.cards.single['taskId'], 'fresh');
+    expect(restored.cards, isEmpty);
     restored.dispose();
     await service.events.close();
   });
@@ -300,47 +300,43 @@ void main() {
     },
   );
 
-  test(
-    'empty home restores previous published discovery from server history',
-    () async {
-      final progressGate = Completer<void>();
-      final service = FakeBotService()
-        ..progressGate = progressGate
-        ..historyItems = [
-          {'status': 'completed', 'taskId': 'yesterday'},
-        ]
-        ..progress = {'phase': 'complete', 'cards': completionEvent()['cards']}
-        ..located = {'anchorTurnId': 42};
-      final controller = ExplorationController(
-        service: service,
-        store: MemoryExplorationStore(),
-        displayName: '测试',
-      )..pause();
-      await controller.initialize();
-      await controller.refreshHome();
-      await flush();
-      expect(controller.cards, isEmpty);
-      await controller.refreshHome();
-      progressGate.complete();
-      await flush();
-      expect(controller.cards, hasLength(3));
-      expect(controller.cards.first['taskId'], 'yesterday');
-      expect(
-        service.calls.where((c) => (c['path'] as String).contains('/locate/')),
-        isEmpty,
-      );
-      controller.acceptHome({'cards': [], 'activeExploration': null});
-      expect(controller.cards, hasLength(3));
-      service.homeCards = [
-        {'title': 'new', 'taskId': 'new-task'},
-      ];
-      controller.acceptHome({'cards': service.homeCards});
-      await flush();
-      expect(controller.cards.single['taskId'], 'new-task');
-      controller.dispose();
-      await service.events.close();
-    },
-  );
+  test('empty home never fills cards from an older exploration', () async {
+    final progressGate = Completer<void>();
+    final service = FakeBotService()
+      ..progressGate = progressGate
+      ..historyItems = [
+        {'status': 'completed', 'taskId': 'yesterday'},
+      ]
+      ..progress = {'phase': 'complete', 'cards': completionEvent()['cards']}
+      ..located = {'anchorTurnId': 42};
+    final controller = ExplorationController(
+      service: service,
+      store: MemoryExplorationStore(),
+      displayName: '测试',
+    )..pause();
+    await controller.initialize();
+    await controller.refreshHome();
+    await flush();
+    expect(controller.cards, isEmpty);
+    await controller.refreshHome();
+    progressGate.complete();
+    await flush();
+    expect(controller.cards, isEmpty);
+    expect(
+      service.calls.where((c) => (c['path'] as String).contains('/locate/')),
+      isEmpty,
+    );
+    controller.acceptHome({'cards': [], 'activeExploration': null});
+    expect(controller.cards, isEmpty);
+    service.homeCards = [
+      {'title': 'new', 'taskId': 'new-task'},
+    ];
+    controller.acceptHome({'cards': service.homeCards});
+    await flush();
+    expect(controller.cards.single['taskId'], 'new-task');
+    controller.dispose();
+    await service.events.close();
+  });
 
   test(
     'locate uses original exploration ID and preserves one backend discovery',

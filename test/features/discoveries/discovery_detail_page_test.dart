@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bots/features/discoveries/discovery_detail_page.dart';
 import 'package:bots/features/chat/chat_controller.dart';
 
@@ -17,6 +19,67 @@ const card = <String, dynamic>{
 };
 
 void main() {
+  testWidgets(
+    'quoted draft survives failure and clears only after acceptance',
+    (tester) async {
+      var response = Completer<bool>();
+      final changes = <Map<String, dynamic>?>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatPage(
+            onExit: () {},
+            onExplore: () {},
+            animate: false,
+            showWelcome: false,
+            referenceCard: card,
+            onReferenceChanged: changes.add,
+            onSend: (_) => response.future,
+          ),
+        ),
+      );
+      final field = find.byType(TextField);
+      await tester.enterText(field, 'why?');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('discovery-reference')), findsOneWidget);
+      response.complete(false);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, 'why?');
+      expect(changes, isEmpty);
+      response = Completer<bool>();
+      tester.widget<TextField>(field).onSubmitted!('why?');
+      await tester.pump();
+      response.complete(true);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('discovery-reference')), findsNothing);
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      expect(changes, [null]);
+    },
+  );
+  test('accepted quote is not attached to the next message', () async {
+    final service = FakeBotService();
+    final controller = ChatController(service, displayName: 'Pal');
+    await controller.initializeSession();
+    controller.referenceDiscovery(card);
+    expect(await controller.send('why?'), isTrue);
+    expect(controller.referenceMaterialId, isNull);
+    expect(await controller.send('next'), isTrue);
+    final posts = service.calls
+        .where(
+          (c) =>
+              c['method'] == 'POST' &&
+              (c['path'] as String).endsWith('/messages'),
+        )
+        .toList();
+    expect((posts.first['data'] as Map)['referenceMaterialId'], 'cat');
+    expect(
+      (posts.last['data'] as Map).containsKey('referenceMaterialId'),
+      isFalse,
+    );
+    controller.dispose();
+    await service.events.close();
+  });
+
   test('reference identity is sent and removed on cancellation', () async {
     final service = FakeBotService();
     final controller = ChatController(service, displayName: 'Pal');

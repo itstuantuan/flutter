@@ -28,6 +28,7 @@ Future<PlazaDiscovery?> showPlazaDiscoveries(
   int initialPage = 0,
   ValueListenable<List<PlazaDiscovery>>? updates,
   VoidCallback? onPresented,
+  ValueChanged<PlazaDiscovery>? onVisible,
 }) {
   assert(discoveries.isNotEmpty);
   return showDialog<PlazaDiscovery>(
@@ -39,6 +40,7 @@ Future<PlazaDiscovery?> showPlazaDiscoveries(
             discoveries: discoveries,
             initialPage: initialPage,
             onPresented: onPresented,
+            onVisible: onVisible,
           )
         : ValueListenableBuilder<List<PlazaDiscovery>>(
             valueListenable: updates,
@@ -46,6 +48,7 @@ Future<PlazaDiscovery?> showPlazaDiscoveries(
               discoveries: cards,
               initialPage: initialPage,
               onPresented: onPresented,
+              onVisible: onVisible,
             ),
           ),
   );
@@ -58,11 +61,13 @@ class PlazaDiscoveryDialog extends StatefulWidget {
     required this.discoveries,
     this.initialPage = 0,
     this.onPresented,
+    this.onVisible,
   }) : assert(discoveries.length > 0);
 
   final List<PlazaDiscovery> discoveries;
   final int initialPage;
   final VoidCallback? onPresented;
+  final ValueChanged<PlazaDiscovery>? onVisible;
 
   @override
   State<PlazaDiscoveryDialog> createState() => _PlazaDiscoveryDialogState();
@@ -73,7 +78,10 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onPresented?.call();
+      if (mounted) {
+        widget.onPresented?.call();
+        widget.onVisible?.call(widget.discoveries[_selected]);
+      }
     });
   }
 
@@ -117,7 +125,10 @@ class _PlazaDiscoveryDialogState extends State<PlazaDiscoveryDialog> {
                   key: const ValueKey('plaza-discovery-pages'),
                   controller: _pages,
                   itemCount: widget.discoveries.length,
-                  onPageChanged: (value) => setState(() => _selected = value),
+                  onPageChanged: (value) {
+                    setState(() => _selected = value);
+                    widget.onVisible?.call(widget.discoveries[value]);
+                  },
                   itemBuilder: (context, index) => AnimatedBuilder(
                     animation: _pages,
                     builder: (context, child) {
@@ -289,52 +300,10 @@ class _DiscoveryCard extends StatelessWidget {
                   const SizedBox(height: 9.18),
                   AspectRatio(
                     aspectRatio: 257.608 / 217.421,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (discovery.coverUrl?.startsWith('https://') == true)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(17),
-                            child: Image.network(
-                              discovery.coverUrl!,
-                              fit: BoxFit.cover,
-                              excludeFromSemantics: true,
-                              errorBuilder: (_, _, _) => Image.asset(
-                                discovery.image,
-                                fit: BoxFit.fill,
-                              ),
-                            ),
-                          )
-                        else
-                          Image.asset(
-                            discovery.image,
-                            fit: BoxFit.fill,
-                            excludeFromSemantics: true,
-                          ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 2.34 * scale,
-                          height: 72.102 * scale,
-                          child: _decoration('photo_shade'),
-                        ),
-                        Positioned(
-                          left: 0,
-                          bottom: 9.19 * scale,
-                          child: Column(
-                            children: [
-                              RotatedBox(
-                                quarterTurns: 1,
-                                child: _decoration('chevron_top'),
-                              ),
-                              RotatedBox(
-                                quarterTurns: 1,
-                                child: _decoration('chevron_bottom'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    child: Image.asset(
+                      'assets/design/discovery_illustration.png',
+                      fit: BoxFit.fill,
+                      excludeFromSemantics: true,
                     ),
                   ),
                   const SizedBox(height: 2.8),

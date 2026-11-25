@@ -75,7 +75,7 @@ class _LiveChatPageState extends State<LiveChatPage>
             if (mounted) _chat!.referenceDiscovery(_reference);
           });
         }
-        if (widget.taskId != null) {
+        if (widget.taskId != null && _reference == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               unawaited(
@@ -184,7 +184,7 @@ class _LiveChatPageState extends State<LiveChatPage>
         _chat?.referenceDiscovery(card);
       },
       messages: _chat?.messages ?? const [],
-      discoveryCards: widget.discoveryCards,
+      discoveryCards: [...?_chat?.discoveryCards, ...widget.discoveryCards],
       discoverySnapshotReady: _chat != null && !_chat!.loading,
       busy:
           widget.busy ||
@@ -214,7 +214,8 @@ class _LiveChatPageState extends State<LiveChatPage>
           return false;
         }
         setState(() => _error = null);
-        return _chat!.submitText(text);
+        // Quoted drafts clear only after the server accepts the message.
+        return _reference == null ? _chat!.submitText(text) : _chat!.send(text);
       },
       useSystemDictation: true,
       onExit: widget.onExit,

@@ -63,9 +63,8 @@ class ExplorationController extends ChangeNotifier {
   String? _pendingStartId, _watchTask;
   bool ready = false, busy = false, _disposed = false, _foreground = true;
   bool _polling = false, _acking = false;
-  Future<void>? _initializing, _homeRequest, _historyRequest;
+  Future<void>? _initializing, _homeRequest;
   Future<Map<String, dynamic>>? _homeFetch;
-  int _homeCardsVersion = 0;
   bool _homeLoaded = false;
   bool get loadingCards =>
       cards.isEmpty && !_homeLoaded && error == null && chat.error == null;
@@ -142,78 +141,13 @@ class ExplorationController extends ChangeNotifier {
 
   void acceptHome(Map<String, dynamic> value) {
     if (_disposed) return;
-    final previousCards = cards;
-    final incoming = value['cards'] as List? ?? [];
-    // Empty/next-day responses do not erase an already displayed discovery.
     home = {
       ...value,
-      'cards': incoming.isEmpty
-          ? previousCards
-          : incoming.take(maxDiscoveryCards).toList(),
+      'cards': (value['cards'] as List? ?? []).take(maxDiscoveryCards).toList(),
     };
-    if (incoming.isNotEmpty) {
-      ++_homeCardsVersion;
-      _homeLoaded = true;
-      _cacheCards();
-    }
+    _homeLoaded = true;
+    _cacheCards();
     _notify();
-    if (incoming.isEmpty) {
-      _historyRequest ??= _restoreLastDiscovery().whenComplete(() {
-        _historyRequest = null;
-        _homeLoaded = true;
-        _notify();
-      });
-      unawaited(_historyRequest!.catchError((Object e) => reportError(e)));
-    }
-  }
-
-  Future<void> _restoreLastDiscovery() async {
-    final version = _homeCardsVersion;
-    var before = 0;
-    while (!_disposed) {
-      final page = await service.request(
-        '/explorations',
-        query: {'before': before},
-        cancelToken: _cancel,
-      );
-      if (_disposed || version != _homeCardsVersion) return;
-      for (final raw in page['items'] as List) {
-        final turn = raw as Map;
-        if (turn['status'] != 'completed') continue;
-        final task = turn['taskId'] as String;
-        final progress = await service.request(
-          '/explorations/${Uri.encodeComponent(task)}/progress',
-          cancelToken: _cancel,
-        );
-        if (_disposed || version != _homeCardsVersion) return;
-        final rawCards = progress['cards'] as List? ?? [];
-        if (progress['phase'] != 'complete' || rawCards.isEmpty) continue;
-        home = {
-          ...home,
-          'cards': [
-            for (final rawCard in rawCards.take(maxDiscoveryCards))
-              {
-                'kind': 'discovery',
-                'taskId': task,
-                'materialId': (rawCard as Map)['materialId'],
-                'title': rawCard['title'],
-                'text': rawCard['reason'] ?? rawCard['summary'] ?? '',
-                'coverUrl': rawCard['coverUrl'],
-                'tags': rawCard['tags'],
-              },
-          ],
-        };
-        _cacheCards();
-        _notify();
-        return;
-      }
-      if (page['hasMore'] != true) return;
-      final next = page['nextBefore'] as int;
-      if (next <= 0 || (before > 0 && next >= before)) {
-        throw const ChatException('探索历史游标无效');
-      }
-      before = next;
-    }
   }
 
   Future<void> refreshHome() =>
@@ -289,6 +223,7 @@ class ExplorationController extends ChangeNotifier {
         cancelToken: _cancel,
       );
       final task = turn['taskId'] as String;
+      chat.followDiscoveryRound(task);
       _pendingStartId = null;
       await _save();
       // This is a task receipt, never a chat turn or synthetic discovery.

@@ -110,6 +110,24 @@ class _LivePlazaPageState extends State<LivePlazaPage>
     _lastPresentedTask = event['taskId'] as String?;
     final eventId = event['eventId'] as String?;
     if (eventId != null) _presentedHere.add(eventId);
+    Map view = event['view'] as Map? ?? {};
+    if (automatic) {
+      try {
+        final result = await widget.controller.service.request(
+          '/explorations/${Uri.encodeComponent(_lastPresentedTask!)}/auto-popup',
+          method: 'POST',
+        );
+        view = result['view'] as Map? ?? {};
+        if (!mounted || result['show'] != true) {
+          _showing = false;
+          return;
+        }
+      } catch (e) {
+        _showing = false;
+        await widget.controller.reportError(e);
+        return;
+      }
+    }
     final cards = automatic
         ? widget.controller.unseenCards(event)
         : (event['cards'] as List).cast<Map>().take(maxDiscoveryCards);
@@ -124,14 +142,42 @@ class _LivePlazaPageState extends State<LivePlazaPage>
       }
       return;
     }
+    if (!automatic) {
+      try {
+        final current = await widget.controller.service.request(
+          '/explorations/${Uri.encodeComponent(_lastPresentedTask!)}/progress',
+        );
+        view = current['view'] as Map? ?? {};
+      } catch (_) {
+        /* Existing cards remain usable while offline. */
+      }
+    }
     final discoveries = cards.map(_discovery).toList();
+    final savedIndex = discoveries.indexWhere(
+      (card) => card.materialId == view['lastMaterialId'],
+    );
     final updates = ValueNotifier(discoveries);
     _dialogCards = updates;
+    if (!mounted) {
+      updates.dispose();
+      _showing = false;
+      return;
+    }
+    Map<String, dynamic>? visible;
     try {
       final selected = await showPlazaDiscoveries(
         context,
         discoveries: discoveries,
+        initialPage: savedIndex < 0 ? 0 : savedIndex,
         updates: updates,
+        onVisible: (selected) {
+          visible = {...?selected.sourceCard, 'taskId': event['taskId']};
+          unawaited(
+            widget.controller.service.discoveries
+                .view(visible!)
+                .catchError((Object e) => widget.controller.reportError(e)),
+          );
+        },
         onPresented: eventId == null
             ? null
             : () => unawaited(
@@ -140,6 +186,19 @@ class _LivePlazaPageState extends State<LivePlazaPage>
                     .catchError((Object e) => widget.controller.reportError(e)),
               ),
       );
+      if (visible != null) {
+        try {
+          await widget.controller.service.discoveries.view(
+            visible!,
+            close: true,
+          );
+        } catch (error) {
+          // A failed browsing receipt must not escape the automatic popup task
+          // or prevent opening the discovery the user selected.
+          await widget.controller.reportError(error);
+          if (mounted) _notice('浏览位置保存失败，请稍后重试');
+        }
+      }
       _dialogCards = null;
       if (!mounted || selected == null) return;
       final taskId = event['taskId'] as String?;
@@ -162,7 +221,9 @@ class _LivePlazaPageState extends State<LivePlazaPage>
   }
 
   PlazaDiscovery _discovery(Map card) => PlazaDiscovery(
-    sourceCard: Map<String, dynamic>.unmodifiable(Map<String, dynamic>.from(card)),
+    sourceCard: Map<String, dynamic>.unmodifiable(
+      Map<String, dynamic>.from(card),
+    ),
     title: card['title'] as String? ?? '',
     body: card['content'] as String? ?? card['summary'] as String? ?? '',
     category: (card['tags'] as List? ?? []).join(' · '),

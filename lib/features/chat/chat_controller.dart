@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/network/api_client.dart';
 import '../exploration/discovery_policy.dart';
 import 'chat_message.dart';
+import '../discoveries/discovery_data.dart';
 import 'chat_service.dart';
 
 String newOperationId() {
@@ -34,6 +35,31 @@ class ChatController extends ChangeNotifier {
   final Future<void> Function()? onUnauthorized;
   final void Function(Map<String, dynamic>)? onHome, onCompletion;
   final void Function(Map<String, dynamic>)? onExplorationProgress;
+  String? _discoveryRound;
+  void followDiscoveryRound(String? task) {
+    _discoveryRound = task;
+    _discoveries.removeWhere((_, card) => card['taskId'] != task);
+  }
+
+  final _discoveries = <String, Map<String, dynamic>>{};
+  List<Map<String, dynamic>> get discoveryCards => _discoveries.values.toList()
+    ..sort(
+      (a, b) =>
+          (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0),
+    );
+  void _acceptDiscovery(Map<String, dynamic> item) {
+    final id = item['discoveryId'];
+    if (id is! String ||
+        item['sessionId'] != sessionId ||
+        item['taskId'] != _discoveryRound) {
+      return;
+    }
+    final card = discoveryCard(item);
+    service.discoveries.accept(card);
+    _discoveries.putIfAbsent(id, () => card);
+    _notify();
+  }
+
   final _turns = <int, Map<String, dynamic>>{};
   final _liveReplies = <int>{};
   final _outgoingText = <String, ChatMessage>{};
@@ -74,6 +100,17 @@ class ChatController extends ChangeNotifier {
                   : '语音消息',
               isInterfaceText: (turn['userText'] as String? ?? '').isEmpty,
               isUser: true,
+              referenceCard: turn['referenceMaterialId'] == null
+                  ? null
+                  : {
+                      ...?(((turn['exploration'] as Map?)?['cards'] as List?)
+                                  ?.firstOrNull
+                              as Map?)
+                          ?.cast<String, dynamic>(),
+                      'taskId': turn['referenceTaskId'],
+                      'sessionId': sessionId,
+                      '_sentSnapshot': true,
+                    },
               createdAt: _createdAt(turn),
               clientMessageId: turn['clientMessageId'] as String?,
             ),
@@ -411,6 +448,20 @@ class ChatController extends ChangeNotifier {
               service.request('/home', cancelToken: cancel));
       if (generation != _generation) return;
       onHome?.call(home);
+      final round = home['activeExploration'] ?? home['latestExploration'];
+      final task = round is Map ? round['taskId'] : null;
+      followDiscoveryRound(task as String?);
+      if (task is String) {
+        final items = await service.requestList(
+          '/explorations/${Uri.encodeComponent(task)}/discoveries',
+          cancelToken: cancel,
+        );
+        if (generation != _generation) return;
+        _discoveries.removeWhere((_, card) => card['taskId'] != task);
+        for (final item in items) {
+          _acceptDiscovery(item);
+        }
+      }
       await _refreshHistory(cancel);
       if (onCompletion != null) {
         final events = await service.requestList(
@@ -438,6 +489,10 @@ class ChatController extends ChangeNotifier {
           _attempt = 0;
           error = null;
           _notify();
+        } else if (event.type == 'exploration_discovery') {
+          _acceptDiscovery(
+            Map<String, dynamic>.from(jsonDecode(event.data) as Map),
+          );
         } else if (event.type == 'exploration_progress') {
           onExplorationProgress?.call(
             Map<String, dynamic>.from(jsonDecode(event.data) as Map),
@@ -541,7 +596,9 @@ class ChatController extends ChangeNotifier {
     locationRevision++;
   }
 
+  int _referenceVersion = 0;
   void referenceDiscovery(Map<String, dynamic>? card) {
+    _referenceVersion++;
     referenceTaskId = (card?['_chatTaskId'] ?? card?['taskId']) as String?;
     referenceMaterialId = card?['materialId'] as String?;
     _notify();
@@ -643,6 +700,7 @@ class ChatController extends ChangeNotifier {
       return false;
     }
     final body = _messageBody(text, attachmentIds);
+    final referenceVersion = _referenceVersion;
     final fingerprint = jsonEncode(body);
     if (_pendingFingerprint != fingerprint) {
       _pendingFingerprint = fingerprint;
@@ -660,6 +718,7 @@ class ChatController extends ChangeNotifier {
       }, live: true);
       _pendingFingerprint = null;
       _pendingId = null;
+      if (_referenceVersion == referenceVersion) referenceDiscovery(null);
       return true;
     } catch (e) {
       if (!_disposed) await handleError(e);

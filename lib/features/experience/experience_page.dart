@@ -397,7 +397,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     if (!mounted || selection == null) return;
     switch (selection) {
       case 'history':
-        await _allDiscoveries();
+        await _allDiscoveries(onlyHistory: true);
       case 'language':
         await _selectLanguage();
       case 'interests':
@@ -443,9 +443,9 @@ class _ExperiencePageState extends State<ExperiencePage>
     }
   }
 
-  Future<void> _selectLanguage() => Navigator.of(context).push<void>(
-    MaterialPageRoute(builder: (_) => const LanguagePage()),
-  );
+  Future<void> _selectLanguage() =>
+      Navigator.of(context)
+          .push<void>(MaterialPageRoute(builder: (_) => const LanguagePage()));
 
   Future<void> _sidebarInterests() async {
     try {
@@ -730,7 +730,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     );
   }
 
-  Future<void> _allDiscoveries() async {
+  Future<void> _allDiscoveries({bool onlyHistory = false}) async {
     if (_real) {
       try {
         await _readyBots();
@@ -743,6 +743,7 @@ class _ExperiencePageState extends State<ExperiencePage>
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => AllDiscoveriesPage(
+          onlyHistory: onlyHistory,
           service: _real ? _bots?.service : null,
           cards: _real
               ? _bots?.cards ?? []
@@ -844,6 +845,7 @@ class _ExperiencePageState extends State<ExperiencePage>
                   for (final (i, card)
                       in (_bots?.cards ?? <Map<String, dynamic>>[]).indexed)
                     HomeDiscovery(
+                      card: card,
                       title: card['title'] as String? ?? '',
                       description: card['text'] as String? ?? '',
                       style: DiscoveryStyle

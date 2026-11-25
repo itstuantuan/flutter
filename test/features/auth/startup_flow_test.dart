@@ -370,7 +370,13 @@ void main() {
     expect(find.byType(DiscoveryDetailPage), findsOneWidget);
     await tester.tap(find.text('和Pal聊聊'));
     await tester.pumpAndSettle();
-    expect(tester.widget<ChatPage>(find.byType(ChatPage)).anchorTurnId, 42);
+    expect(tester.widget<ChatPage>(find.byType(ChatPage)).anchorTurnId, isNull);
+    expect(
+      tester
+          .widget<ChatPage>(find.byType(ChatPage))
+          .referenceCard?['materialId'],
+      'material-2',
+    );
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();

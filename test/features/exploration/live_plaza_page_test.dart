@@ -1,3 +1,5 @@
+import 'package:bots/core/network/api_client.dart';
+
 import 'package:bots/features/exploration/exploration_controller.dart';
 import 'package:bots/features/exploration/live_plaza_page.dart';
 import 'package:bots/features/plaza/plaza_discovery.dart';
@@ -6,7 +8,72 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
 
+class CloseFailureService extends FakeBotService {
+  @override
+  Future<Map<String, dynamic>> request(
+    String path, {
+    String method = 'GET',
+    Object? data,
+    Map<String, dynamic>? query,
+    CancelToken? cancelToken,
+  }) async {
+    if (path.endsWith('/view') && data is Map && data['closeGroup'] == true) {
+      final options = RequestOptions(path: path);
+      throw DioException(
+        requestOptions: options,
+        response: Response(requestOptions: options, statusCode: 503),
+      );
+    }
+    return super.request(
+      path,
+      method: method,
+      data: data,
+      query: query,
+      cancelToken: cancelToken,
+    );
+  }
+}
+
 void main() {
+  testWidgets('failed close receipt does not escape automatic popup', (
+    tester,
+  ) async {
+    final service = CloseFailureService()
+      ..progress = {
+        'phase': 'complete',
+        'cards': completionEvent()['cards'],
+        'view': {'revision': 0},
+      };
+    final controller = ExplorationController(
+      service: service,
+      store: MemoryExplorationStore(),
+      displayName: 'Pal',
+    );
+    await controller.initialize();
+    await controller.chat.initializeSession();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LivePlazaPage(
+          controller: controller,
+          taskId: 'task-1',
+          onChat: (_) async {},
+          onOpenDiscovery: (_) async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(PlazaDiscoveryDialog), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlazaDiscoveryDialog), findsNothing);
+    expect(controller.error, isNotNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+    await service.events.close();
+  });
+
   testWidgets(
     'late cards append to the open carousel, update dots and preserve the page',
     (tester) async {
@@ -199,7 +266,7 @@ void main() {
       });
       expect(controller.pendingEvents, hasLength(1));
       expect(tester.binding.lifecycleState, AppLifecycleState.resumed);
-      expect(store.value['displayed'], isNull);
+      expect(store.value['displayed'] ?? [], isEmpty);
       await tester.pumpAndSettle();
       expect(find.byType(PlazaDiscoveryDialog), findsOneWidget);
       expect(

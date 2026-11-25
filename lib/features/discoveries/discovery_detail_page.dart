@@ -1,3 +1,4 @@
+import 'discovery_feedback_button.dart';
 import '../../core/localization/app_localizations.dart';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../chat/chat_service.dart';
 import 'all_discoveries_page.dart';
+import '../../core/config/app_env.dart';
+import '../shared/app_toast.dart';
 
 /// Figma 541:826. Returning a card requests a conversation about that discovery.
 class DiscoveryDetailPage extends StatefulWidget {
@@ -23,59 +26,149 @@ class DiscoveryDetailPage extends StatefulWidget {
 }
 
 class _DiscoveryDetailPageState extends State<DiscoveryDetailPage> {
-  // Presentation-only until a discovery feedback endpoint is available.
+  late Map<String, dynamic> _card = {...widget.card};
+  bool _loading = false, _writing = false;
+  String? _error;
+  @override
+  void initState() {
+    super.initState();
+    if (widget.service != null) _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final card = await widget.service!.discoveries.detail(_card);
+      if (!mounted) return;
+      setState(() {
+        _card = widget.card['_sentSnapshot'] == true
+            ? {
+                ...card,
+                ...widget.card,
+                'discoveryId': card['discoveryId'],
+                'state': card['state'],
+              }
+            : card;
+        _loading = false;
+        _readFeedback();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        try {
+          await widget.service!.discoveries.stateWrite(_card, 'displayed');
+        } catch (_) {
+          if (mounted) showAppToast(context, '已读状态保存失败，请稍后重试');
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '发现加载失败或内容不可用，请重试';
+        });
+      }
+    }
+  }
+
+  void _readFeedback() {
+    final feedback =
+        widget.service?.discoveries.states[_card['materialId']]?['feedback'];
+    _liked = feedback == 'like'
+        ? true
+        : feedback == 'dislike'
+        ? false
+        : null;
+  }
+
+  Future<void> _saveFeedback(bool like) async {
+    if (_writing) return;
+    if (widget.service == null) {
+      setState(() => _liked = _liked == like ? null : like);
+      return;
+    }
+    final previous = _liked;
+    final next = _liked == like ? null : like;
+    setState(() {
+      _writing = true;
+      _liked = next;
+    });
+    try {
+      await widget.service!.discoveries.stateWrite(
+        _card,
+        'feedback',
+        action: next == null
+            ? 'none'
+            : next
+            ? 'like'
+            : 'dislike',
+      );
+      if (mounted) setState(_readFeedback);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _liked = previous);
+        showAppToast(context, '反馈保存失败，请重试');
+      }
+    } finally {
+      if (mounted) setState(() => _writing = false);
+    }
+  }
+
+  String _imageUrl(String key) {
+    final raw = (_card['illustration'] as Map?)?[key] as String? ?? '';
+    return raw.isEmpty
+        ? ''
+        : Uri.parse(AppEnv.apiBaseUrl).resolve(raw).toString();
+  }
+
+  Widget _image(String url, {bool fallback = false}) =>
+      url.startsWith('https://') || url.startsWith('http://')
+      ? Image.network(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => fallback
+              ? _scene()
+              : _image(_imageUrl('fallbackUrl'), fallback: true),
+        )
+      : _scene();
   bool? _liked;
-  String text(String key) => (widget.card[key] as String? ?? '').trim();
+  String text(String key) => (_card[key] as String? ?? '').trim();
   Widget icon(String name, double size) =>
       SvgPicture.asset('assets/chat/$name.svg', width: size, height: size);
 
   Widget _feedback(bool like) {
     final selected = _liked == like;
     return Expanded(
-      child: Semantics(
+      child: DiscoveryFeedbackButton(
         selected: selected,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(91),
-            border: Border.all(color: const Color(0x5CD4C9EB)),
-            gradient: selected
-                ? const LinearGradient(
-                    colors: [Color(0xFF5832EF), Color(0xFF8B42DE)],
-                  )
-                : null,
-          ),
-          child: TextButton(
-            onPressed: () => setState(() => _liked = selected ? null : like),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 39),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Transform.flip(
-                  flipY: !like,
-                  child: icon(
-                    'detail_${like ? 'like' : 'dislike'}${selected ? '_selected' : ''}',
-                    24,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                AppText(like ? '喜欢' : '不喜欢'),
-              ],
-            ),
-          ),
+        positive: like,
+        onPressed: _writing ? null : () => _saveFeedback(like),
+        icon: Transform.flip(
+          flipY: !like,
+          child: icon('detail_${like ? 'like' : 'dislike'}', 24),
         ),
+        label: AppText(like ? '喜欢' : '不喜欢'),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final tags = (widget.card['tags'] as List? ?? []).whereType<String>();
+    if (_loading || _error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const AppText('新发现')),
+        body: Center(
+          child: _loading
+              ? const CircularProgressIndicator()
+              : TextButton(onPressed: _load, child: Text(_error!)),
+        ),
+      );
+    }
+    final tags = (_card['tags'] as List? ?? []).whereType<String>();
     final labels = <String>{
-      if (discoveryCategory(widget.card).isNotEmpty)
-        discoveryCategory(widget.card),
+      if (discoveryCategory(_card).isNotEmpty) discoveryCategory(_card),
       for (final tag in tags) discoveryCategory({'category': tag}),
     };
     final body =
@@ -86,7 +179,9 @@ class _DiscoveryDetailPageState extends State<DiscoveryDetailPage> {
           'reason',
         ].map(text).where((s) => s.isNotEmpty).firstOrNull ??
         '';
-    final cover = text('coverUrl');
+    final cover = _imageUrl('url').isNotEmpty
+        ? _imageUrl('url')
+        : text('coverUrl');
     final scale = MediaQuery.sizeOf(context).width / 375;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -109,14 +204,7 @@ class _DiscoveryDetailPageState extends State<DiscoveryDetailPage> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          if (cover.startsWith('https://'))
-                            Image.network(
-                              cover,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => _scene(),
-                            )
-                          else
-                            _scene(),
+                          _image(cover),
                           const DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -266,7 +354,7 @@ class _DiscoveryDetailPageState extends State<DiscoveryDetailPage> {
                   ),
                 ),
                 child: TextButton(
-                  onPressed: () => Navigator.pop(context, widget.card),
+                  onPressed: () => Navigator.pop(context, _card),
                   style: TextButton.styleFrom(
                     minimumSize: const Size.fromHeight(58),
                     foregroundColor: Colors.white,

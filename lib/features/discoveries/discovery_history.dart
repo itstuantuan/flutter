@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_client.dart';
 import '../chat/chat_service.dart';
+import 'discovery_data.dart';
 
 /// Uses the same history/progress endpoints as exploration restoration.
 class DiscoveryHistory extends ChangeNotifier {
@@ -13,65 +14,55 @@ class DiscoveryHistory extends ChangeNotifier {
   final ChatService service;
   final List<Map<String, dynamic>> cards;
   final _cancel = CancelToken();
-  int _before = 0;
+  String _cursor = '', query = '';
+  bool history = false;
+  int _generation = 0;
+  Future<void> search(String value, {bool? onlyHistory}) async {
+    query = value.trim();
+    history = onlyHistory ?? history;
+    _generation++;
+    _cursor = '';
+    cards.clear();
+    hasMore = true;
+    loading = false;
+    await loadMore();
+  }
+
   bool loading = false, hasMore = true, _disposed = false;
   String? error;
 
   Future<void> loadMore() async {
     if (loading || !hasMore || _disposed) return;
+    final generation = _generation;
     loading = true;
     error = null;
     notifyListeners();
     try {
       final page = await service.request(
-        '/explorations',
-        query: {'before': _before},
+        '/discoveries',
+        query: {'cursor': _cursor, 'q': query, 'history': history, 'limit': 20},
         cancelToken: _cancel,
       );
-      final more = page['hasMore'] == true;
-      final next = page['nextBefore'];
-      if (more &&
-          (next is! int || next <= 0 || (_before > 0 && next >= _before))) {
-        throw const ChatException('探索历史游标无效');
-      }
-      final batch = <Map<String, dynamic>>[];
-      for (final turn in (page['items'] as List).whereType<Map>()) {
-        if (turn['status'] != 'completed') continue;
-        final task = turn['taskId'];
-        if (task is! String || task.isEmpty) continue;
-        final result = await service.request(
-          '/explorations/${Uri.encodeComponent(task)}/progress',
-          cancelToken: _cancel,
-        );
-        if (_disposed) return;
-        for (final card in (result['cards'] as List? ?? []).whereType<Map>()) {
-          batch.add({
-            ...Map<String, dynamic>.from(card),
-            'taskId': task,
-            'createdAt':
-                card['createdAt'] ?? turn['completedAt'] ?? turn['createdAt'],
-          });
-        }
-      }
-      if (_disposed) return;
-      for (final card in batch) {
+      if (_disposed || generation != _generation) return;
+      if (_cursor.isEmpty) cards.clear();
+      for (final item in (page['items'] as List).whereType<Map>()) {
+        final card = discoveryCard(Map<String, dynamic>.from(item));
+        card['_history'] = history;
+        service.discoveries.accept(card);
         final index = cards.indexWhere(
-          (old) =>
-              old['taskId'] == card['taskId'] &&
-              old['materialId'] == card['materialId'],
+          (old) => card['materialId'] != null
+              ? old['materialId'] == card['materialId']
+              : old['discoveryId'] == card['discoveryId'],
         );
-        if (index < 0) {
-          cards.add(card);
-        } else {
-          cards[index] = {...cards[index], ...card};
-        }
+        if (index < 0) cards.add(card);
       }
-      hasMore = more;
-      if (more) _before = next as int;
+      hasMore = page['hasMore'] == true;
+      _cursor = page['nextCursor'] as String? ?? '';
+      if (hasMore && _cursor.isEmpty) throw const ChatException('探索历史游标无效');
     } catch (_) {
-      if (!_disposed) error = '发现加载失败，请重试';
+      if (!_disposed && generation == _generation) error = '发现加载失败，请重试';
     } finally {
-      if (!_disposed) {
+      if (!_disposed && generation == _generation) {
         loading = false;
         notifyListeners();
       }

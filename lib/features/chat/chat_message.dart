@@ -27,6 +27,7 @@ class ChatMessage {
     this.isUser = false,
     this.isInterfaceText = false,
     this.voice,
+    this.referenceCard,
     this.turnId,
     this.referenceTaskId,
     this.cards = const [],
@@ -41,6 +42,7 @@ class ChatMessage {
   /// Only app-generated status copy is localized; conversation content is verbatim.
   final bool isInterfaceText;
   final VoiceClip? voice;
+  final Map<String, dynamic>? referenceCard;
   // Server identity is retained for navigation; a discovery stays one turn.
   final int? turnId;
   final String? referenceTaskId;

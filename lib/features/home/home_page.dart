@@ -1,3 +1,4 @@
+import '../discoveries/discovery_image.dart';
 import '../../core/localization/app_localizations.dart';
 
 import 'dart:math' as math;
@@ -18,8 +19,10 @@ class HomeDiscovery {
     required this.description,
     required this.title,
     this.style = DiscoveryStyle.blue,
+    this.card,
   });
   final String description, title;
+  final Map<String, dynamic>? card;
   final DiscoveryStyle style;
 }
 
@@ -492,15 +495,21 @@ class _DiscoveryCard extends StatelessWidget {
     height: 31 / 16,
     fontWeight: FontWeight.w400,
     letterSpacing: 0,
-    color: Colors.white,
+    color: Color(0xFFF2EDFF),
+    shadows: [
+      Shadow(color: Color(0x990D0820), offset: Offset(0, 1), blurRadius: 4),
+    ],
   );
   static const titleStyle = TextStyle(
     fontFamily: 'PingFang SC',
     fontSize: 18,
     height: 31 / 18,
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w600,
     letterSpacing: 0,
     color: Colors.white,
+    shadows: [
+      Shadow(color: Color(0xB30D0820), offset: Offset(0, 1), blurRadius: 6),
+    ],
   );
   static double heightFor(
     BuildContext context,
@@ -537,7 +546,15 @@ class _DiscoveryCard extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (outlined)
+        if (discovery.card?['illustration'] != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: DiscoveryImage(
+              card: discovery.card!,
+              fallback: const ColoredBox(color: Color(0xFF1B1336)),
+            ),
+          )
+        else if (outlined)
           SvgPicture.asset(
             'assets/home/secondary_background.svg',
             fit: BoxFit.fill,
@@ -596,6 +613,37 @@ class _DiscoveryCard extends StatelessWidget {
             height: 20,
             child: _CardDiamonds(),
           ),
+        // Keep the artwork visible while giving white copy a stable contrast.
+        if (discovery.card?['illustration'] != null || glass)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x66130D28),
+                      Color(0xA6130D28),
+                      Color(0x80130D28),
+                    ],
+                    stops: [0, .55, 1],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0x52D8C8FF)),
+              ),
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(11, 7, 11, 18),
           child: Column(
@@ -612,18 +660,12 @@ class _DiscoveryCard extends StatelessWidget {
                     Text(
                       discovery.description,
                       textAlign: TextAlign.center,
-                      style: glass
-                          ? descriptionStyle.copyWith(
-                              color: const Color(0xFF090909),
-                            )
-                          : descriptionStyle,
+                      style: descriptionStyle,
                     ),
                     Text(
                       discovery.title,
                       textAlign: TextAlign.center,
-                      style: glass
-                          ? titleStyle.copyWith(color: const Color(0xFF090909))
-                          : titleStyle,
+                      style: titleStyle,
                     ),
                   ],
                 ),

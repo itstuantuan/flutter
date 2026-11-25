@@ -10,6 +10,7 @@ import 'chat_artwork.dart';
 import 'chat_discovery_carousel.dart';
 import 'discovery_inbox.dart';
 import 'discovery_reference.dart';
+import '../discoveries/discovery_detail_page.dart';
 import 'chat_service.dart';
 
 import 'chat_message.dart';
@@ -123,6 +124,7 @@ class _ChatPageState extends State<ChatPage>
   }
 
   final _inbox = DiscoveryInbox();
+  String? _lastViewIdentity;
   Timer? _arrivalBatch, _hintTimer;
   bool _showNewHint = false, _cardInteracting = false, _deferredArrival = false;
   bool _inForeground = true;
@@ -527,6 +529,7 @@ class _ChatPageState extends State<ChatPage>
 
   Future<void> _send() async {
     final text = _input.text.trim();
+    final submittedReference = _reference;
     if (_busy || _dictating || text.isEmpty) return;
     setState(() {
       _sendingText = true;
@@ -550,6 +553,10 @@ class _ChatPageState extends State<ChatPage>
         ]);
       }
       _input.clear();
+      if (submittedReference != null &&
+          identical(_reference, submittedReference)) {
+        _referenceDiscovery(null);
+      }
       _scrollToLatest();
     } catch (_) {
       if (mounted) {
@@ -962,6 +969,19 @@ class _ChatPageState extends State<ChatPage>
     if (card != null && _inbox.unread.remove(DiscoveryInbox.identity(card))) {
       setState(() {});
     }
+    final identity = card == null
+        ? null
+        : '${card['_chatTaskId']}:${card['materialId']}';
+    if (card != null &&
+        widget.discoveryService != null &&
+        identity != _lastViewIdentity) {
+      _lastViewIdentity = identity;
+      unawaited(
+        widget.discoveryService!.discoveries.view(card).catchError((Object _) {
+          if (_lastViewIdentity == identity) _lastViewIdentity = null;
+        }),
+      );
+    }
     final task = card?['_chatTaskId'];
     if (task is String && _reportedTasks.add(task)) {
       widget.onDiscoveryVisible?.call(task);
@@ -1028,7 +1048,25 @@ class _ChatPageState extends State<ChatPage>
         ? null
         : _textKeys.putIfAbsent(message.turnId!, GlobalKey.new);
     final bubble = message.isUser
-        ? ChatBubble(text: displayText, isUser: true)
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (message.referenceCard case final card?)
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => DiscoveryDetailPage(
+                        card: card,
+                        service: widget.discoveryService,
+                      ),
+                    ),
+                  ),
+                  child: DiscoveryReference(card: card),
+                ),
+              if (message.referenceCard != null) const SizedBox(height: 8),
+              ChatBubble(text: displayText, isUser: true),
+            ],
+          )
         : message.isThinking
         ? Align(
             alignment: AlignmentDirectional.centerStart,

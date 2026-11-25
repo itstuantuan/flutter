@@ -1,21 +1,19 @@
 import '../../core/localization/app_localizations.dart';
 
 import 'package:flutter/material.dart';
+
+import '../discoveries/discovery_image.dart';
+
 import 'package:flutter_svg/flutter_svg.dart';
 
 /// Figma 541:2081. The preview retains the identity of the quoted discovery.
 class DiscoveryReference extends StatelessWidget {
-  const DiscoveryReference({
-    super.key,
-    required this.card,
-    required this.onDismiss,
-  });
+  const DiscoveryReference({super.key, required this.card, this.onDismiss});
   final Map<String, dynamic> card;
-  final VoidCallback onDismiss;
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
-    final url = card['coverUrl'] as String?;
     Widget fallback() =>
         Image.asset('assets/chat/reference_thumbnail.png', fit: BoxFit.cover);
     return Container(
@@ -33,13 +31,7 @@ class DiscoveryReference extends StatelessWidget {
             child: SizedBox(
               width: 70,
               height: 51,
-              child: url?.startsWith('https://') == true
-                  ? Image.network(
-                      url!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => fallback(),
-                    )
-                  : fallback(),
+              child: DiscoveryImage(card: card, fallback: fallback()),
             ),
           ),
           const SizedBox(width: 8),
@@ -65,20 +57,21 @@ class DiscoveryReference extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: IconButton(
-                        tooltip: translate(context, '取消引用'),
-                        padding: EdgeInsets.zero,
-                        onPressed: onDismiss,
-                        icon: SvgPicture.asset(
-                          'assets/chat/reference_close.svg',
-                          width: 16,
-                          height: 16,
+                    if (onDismiss != null)
+                      SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: IconButton(
+                          tooltip: translate(context, '取消引用'),
+                          padding: EdgeInsets.zero,
+                          onPressed: onDismiss,
+                          icon: SvgPicture.asset(
+                            'assets/chat/reference_close.svg',
+                            width: 16,
+                            height: 16,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
                 Text(

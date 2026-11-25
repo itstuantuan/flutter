@@ -91,6 +91,25 @@ class FakeBotService extends ChatService {
       if (failProgress) throw const ChatException('进度连接失败');
       return snapshot;
     }
+    if (path.contains('/cards/'))
+      return {
+        'discoveryId': 'd-test',
+        'taskId': 'task-1',
+        'sessionId': 'session-1',
+        'card': (progress['cards'] as List).first,
+        'state': {'revision': 0, 'feedback': 'none'},
+      };
+    if (path.endsWith('/displayed') || path.endsWith('/feedback'))
+      return {
+        'revision': ((data as Map)['revision'] as int) + 1,
+        'feedback': data['action'] ?? 'none',
+      };
+    if (path.endsWith('/auto-popup'))
+      return {
+        'show': true,
+        'view': {'revision': 1},
+      };
+    if (path.endsWith('/view')) return {'revision': 2};
     if (path.endsWith('/square')) return square;
     if (path.contains('/locate/')) return located;
     if (path.endsWith('/explorations') && method == 'POST') {
@@ -130,6 +149,7 @@ class FakeBotService extends ChatService {
     CancelToken? cancelToken,
   }) async {
     _record(path, 'GET', null, null);
+    if (path.endsWith('/discoveries')) return [];
     return completions;
   }
 
