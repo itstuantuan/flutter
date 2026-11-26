@@ -32,8 +32,8 @@ const uiEnglish = <String, String>{
 
   '关闭侧栏': 'Close menu',
   '查看完整内容': 'View full discovery',
-  'Pals\n让陪伴与灵感融入每一天。\n\n版本 0.1.0':
-      'Pals\nCompanionship and inspiration, every day.\n\nVersion 0.1.0',
+  'Pals\n让陪伴与灵感融入每一天。\n\n版本 1.0.0':
+      'Pals\nCompanionship and inspiration, every day.\n\nVersion 1.0.0',
   'ViiTor 在星空露台向你挥手': 'ViiTor waves to you from a terrace under the stars',
   'ViiTor 和伙伴们在明亮的创作广场散步': 'ViiTor and friends explore the creative plaza',
   'Pals。你的专属 AI 伙伴，也是另一个自己。Welcome to Pals!':

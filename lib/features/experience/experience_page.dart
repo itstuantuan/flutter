@@ -439,7 +439,7 @@ class _ExperiencePageState extends State<ExperiencePage>
           ),
         );
       case 'about':
-        await _sidebarInfo('关于我们', 'Pals\n让陪伴与灵感融入每一天。\n\n版本 0.1.0');
+        await _sidebarInfo('关于我们', 'Pals\n让陪伴与灵感融入每一天。\n\n版本 1.0.0');
     }
   }
 

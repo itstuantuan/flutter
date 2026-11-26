@@ -17,7 +17,7 @@ class HomeSidebar extends StatelessWidget {
     this.unreadCount = 0,
     this.avatar,
     this.avatarUrl,
-    this.version = '0.1.0',
+    this.version = '1.0.0',
   });
   final String name, version;
   final Uint8List? avatar;
